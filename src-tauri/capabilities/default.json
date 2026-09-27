@@ -7,6 +7,7 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "drag:default"
   ]
 }

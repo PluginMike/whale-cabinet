@@ -19,12 +19,14 @@ export const hooks: {
   drag?: (p: Pane, ev: MouseEvent) => void;
   virtual?: Record<string, (loc: string, p: Pane) => Promise<Entry[]>>;
   thumb?: (e: Entry) => string | undefined;
-  info?: (el: HTMLElement, picked: Entry[], p: Pane) => boolean;
+  info: ((el: HTMLElement, picked: Entry[], p: Pane) => boolean)[];
+  tagDrop?: (tag: string, paths: string[]) => void;
+  dropMenu?: (x: number, y: number, pick: (copy: boolean) => void) => void;
   locTitle?: Record<string, (loc: string) => string>;
   open?: (e: Entry, p: Pane) => void;
   onNavigate?: (p: Pane) => void;
   keys: ((ev: KeyboardEvent, p: Pane) => boolean)[];
-} = { keys: [], virtual: {}, locTitle: {} };
+} = { keys: [], info: [], virtual: {}, locTitle: {} };
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
@@ -167,7 +169,7 @@ export function info(p = pane()) {
   const el = $("info");
   if (el.hidden) return;
   const picked = p.selected();
-  if (hooks.info?.(el, picked, p)) return;
+  for (const h of hooks.info) if (h(el, picked, p)) return;
   if (picked.length === 1) {
     const e = picked[0];
     const pairs: [string, string][] = [["Type", typeName(e)]];
@@ -232,9 +234,10 @@ export const allPanes = () => tabs.flatMap((t) => t.panes);
 
 // ---------- sidebar: places ----------
 export type PlaceItem = { name: string; path: string };
+export const drawerHtml = (p: PlaceItem, extra = "") =>
+  `<div class="drawer" data-p="${esc(p.path)}" title="${esc(p.path)}"><span class="label">${esc(p.name)}</span><span class="handle"></span>${extra}</div>`;
 export function renderPlaces(list: PlaceItem[]) {
-  $("places").innerHTML = list.map((p) =>
-    `<div class="drawer" data-p="${esc(p.path)}" title="${esc(p.path)}"><span class="label">${esc(p.name)}</span><span class="handle"></span></div>`).join("");
+  $("places").innerHTML = list.map((p) => drawerHtml(p)).join("") + drawerHtml({ name: "Trash", path: "trash:/" });
   chrome();
 }
 $("sidebar").addEventListener("click", (ev) => {

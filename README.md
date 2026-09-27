@@ -33,6 +33,19 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 - Start typing to filter the current view. Hidden files: Ctrl+H (also honours `.hidden` files).
 - Drag from a row's empty space (not its name) to rubber-band select.
 - The view refreshes itself when files change on disk.
+- Drag items onto a folder, a Places drawer or another pane to move them (hold Ctrl to copy); drag past the
+  window edge to hand them to another app. Files dropped in from other apps land where you drop them.
+- Long operations show in a progress panel with Cancel; name clashes open a conflict window
+  (Skip / Overwrite / Rename / apply to all).
+
+### Data safety
+
+- Copies go to a hidden temp file and are renamed into place, so a cancelled or failed copy never leaves a
+  half-written file under the real name and never truncates the file it would replace.
+- Moves across filesystems copy, `fsync`, re-read and compare a CRC32 of every file, and only then delete the source.
+- Renames and moves use `renameat2(RENAME_NOREPLACE)`: nothing is silently overwritten.
+- "Overwrite" between a file and a folder sends the old item to the Trash instead of deleting it.
+- Symlinks are copied as links and deleted without following; pipes/sockets/devices are skipped, not read.
 
 ## Shortcuts
 
@@ -51,6 +64,14 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 | Enter | Open |
 | Esc | Clear filter, then selection |
 | F5 | Reload |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy / Cut / Paste (system clipboard, `text/uri-list`) |
+| F2 | Rename inline |
+| Ctrl+D | Duplicate |
+| Ctrl+Shift+N, F10 | New folder |
+| Ctrl+Alt+N | New file |
+| Del / Shift+Del | Move to Trash / Delete permanently (asks first) |
+| Ctrl+R (in Trash) | Restore |
+| Ctrl+Z | Undo last operation |
 
 ## Theming (DankMaterialShell + Hyprland)
 

@@ -13,6 +13,8 @@ t = sys.argv[1]; big = f"{t}/big"; play = f"{t}/play"
 os.makedirs(big); os.makedirs(f"{play}/sub dir/inner"); os.makedirs(f"{t}/fakehome")
 for i in range(10000): open(f"{big}/file {i}.{['txt','png','rs','mp3','zip'][i%5]}", "w").close()
 for i in range(300): os.mkdir(f"{big}/folder {i}")
+os.makedirs(f"{t}/ops/target")
+open(f"{t}/ops/a.md", "w").write("# hello\n")
 for n in ["a.md", "b 10.txt", "b 9.txt", "new\nline", "ünïcode 💾.pdf", ".secret", "sub dir/x.png", "sub dir/inner/deep.rs"]:
     open(f"{play}/{n}", "w").close()
 os.symlink("nowhere", f"{play}/dangling"); os.mkfifo(f"{play}/pipe")
@@ -31,12 +33,13 @@ run() {  # $1 = label, rest = env overrides
       *"[selftest] ACT touch"*) touch "$T/play/live1" "$T/play/live2" ;;
       *"[selftest] ACT theme-toggle"*) dms ipc call theme toggle >/dev/null 2>&1; (sleep 1.5; pin_ws) & ;;
       *"[selftest] ACT wallpaper-next"*) dms ipc call wallpaper next >/dev/null 2>&1; (sleep 1.5; pin_ws) & ;;
+      *"[selftest] ACT dialog-class"*) if hyprctl clients -j | grep -q '"class": "whale-cabinet-dialog"'; then echo "[$label] PASS dialog window class is whale-cabinet-dialog"; else echo "[$label] FAIL dialog window class"; fails_extra=1; fi ;;
       *"DONE fails="*) fails=${l##*=}; pkill -x whale-cabinet ;;
       *"panicked"*|*"error["*) echo "$l" ;;
     esac
     [[ "$l" == *"[selftest]"* ]] && echo "[$label] ${l#*\[selftest\] }"
   done < <(env "$@" timeout 300 npx tauri dev 2>&1)
-  return $(( fails > 0 ))
+  return $(( fails > 0 || ${fails_extra:-0} ))
 }
 # Keep test windows off real screens: if a headless output named WCTEST exists (hyprctl output create
 # headless WCTEST), send whale-cabinet windows to its workspace. Runtime rule only; re-added per run since

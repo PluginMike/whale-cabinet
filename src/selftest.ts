@@ -93,6 +93,98 @@ suites.theme = async () => {
   log("SHOT wallpaper");
 };
 
+suites.ops = async (base) => {
+  const { listen } = await import("@tauri-apps/api/event");
+  const { getAllWebviewWindows } = await import("@tauri-apps/api/webviewWindow");
+  const p = () => app.pane();
+  const dir = `${base}/ops`;
+  const has = (n: string) => names().includes(n);
+  const sel = (...ns: string[]) => p().selectPaths(ns.map((n) => `${p().loc}/${n}`));
+  // jobs report back on "op"; answer conflicts ourselves (the dialog window is checked, then closed)
+  let conflicts = 0, lastDone: any = null;
+  const un = await listen<any>("op", async ({ payload }) => {
+    if (payload.state === "conflict") {
+      conflicts++;
+      await sleep(600);
+      const dlg = (await getAllWebviewWindows()).find((w) => w.label.startsWith("dlg-"));
+      check("conflict dialog window opened", !!dlg);
+      log("ACT dialog-class");
+      await sleep(400);
+      await invoke("op_resolve", { id: payload.id, choice: { choice: "rename", name: "a copy.md" }, all: false });
+      await dlg?.destroy();
+    }
+    if (payload.state === "done") lastDone = payload;
+  });
+  const waitDone = () => { lastDone = null; return until(() => !!lastDone, 15000); };
+
+  p().navigate(dir); await until(() => has("a.md"));
+  sel("a.md"); key("c", { ctrlKey: true }); await sleep(100);
+  p().navigate(`${dir}/target`); await until(() => p().loc.endsWith("target"));
+  key("v", { ctrlKey: true }); await waitDone();
+  check("copy + paste", (await until(() => has("a.md"))) >= 0);
+  key("v", { ctrlKey: true }); await waitDone();
+  check("conflict → rename", conflicts === 1 && (await until(() => has("a copy.md"))) >= 0, names().join("|"));
+  sel("a copy.md"); key("F2"); await sleep(50);
+  const inp = document.querySelector<HTMLInputElement>("input.rename");
+  check("F2 opens inline rename", !!inp);
+  if (inp) { inp.value = "renamed ✓.md"; inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }
+  check("rename applied", (await until(() => has("renamed ✓.md"))) >= 0);
+  key("z", { ctrlKey: true }); await waitDone();
+  check("undo rename", (await until(() => has("a copy.md") && !has("renamed ✓.md"))) >= 0);
+
+  sel("a copy.md"); key("Delete"); await waitDone();
+  check("Del moves to trash", (await until(() => !has("a copy.md"))) >= 0);
+  p().navigate("trash:/");
+  check("trash view lists it", (await until(() => has("a copy.md"))) >= 0);
+  log("SHOT trash");
+  p().navigate(`${dir}/target`); await until(() => has("a.md"));
+  key("z", { ctrlKey: true }); await waitDone();
+  check("undo trash restores", (await until(() => has("a copy.md"))) >= 0);
+
+  sel("a copy.md"); key("Delete", { shiftKey: true }); await sleep(80);
+  check("Shift+Del asks first", !!document.querySelector(".modal"));
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); await waitDone();
+  check("permanent delete", (await until(() => !has("a copy.md"))) >= 0);
+
+  key("n", { ctrlKey: true, shiftKey: true }); await until(() => !!document.querySelector("input.rename"));
+  const nf = document.querySelector<HTMLInputElement>("input.rename");
+  if (nf) { nf.value = "made"; nf.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }
+  check("new folder + name", (await until(() => has("made"))) >= 0);
+  sel("a.md"); key("d", { ctrlKey: true }); await waitDone();
+  check("duplicate", (await until(() => has("a (copy).md"))) >= 0);
+  sel("a (copy).md"); key("x", { ctrlKey: true }); await sleep(100);
+  p().navigate(`${dir}/target/made`); await until(() => p().loc.endsWith("made"));
+  key("v", { ctrlKey: true }); await waitDone();
+  check("cut + paste moves", (await until(() => has("a (copy).md"))) >= 0);
+  p().goUp(); await until(() => has("made"));
+  check("…and removes the source", !has("a (copy).md"));
+
+  // drag a.md onto the "made" folder row
+  sel("a.md"); await sleep(50);
+  const idx = (n: string) => p().rows.findIndex((r) => r.e.name === n);
+  const src = document.querySelector<HTMLElement>(`.item[data-i="${idx("a.md")}"] .name`)!.getBoundingClientRect();
+  const dst = document.querySelector<HTMLElement>(`.item[data-i="${idx("made")}"] .body`)!.getBoundingClientRect();
+  document.querySelector(`.item[data-i="${idx("a.md")}"] .name`)!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, clientX: src.x + 5, clientY: src.y + 5 }));
+  window.dispatchEvent(new MouseEvent("mousemove", { clientX: src.x + 40, clientY: src.y + 30 }));
+  window.dispatchEvent(new MouseEvent("mousemove", { clientX: dst.x + 200, clientY: dst.y + 8 }));
+  check("drag shows target", !!document.querySelector(".dragover"));
+  window.dispatchEvent(new MouseEvent("mouseup", { clientX: dst.x + 200, clientY: dst.y + 8 }));
+  await waitDone();
+  check("drag & drop moves into folder", (await until(() => !has("a.md"))) >= 0);
+
+  // big copy: progress panel + cancel, no partial files
+  p().navigate(`${base}/big`); await until(() => p().rows.length > 1000);
+  const id = await invoke<number>("op_transfer", { sources: [`${base}/big`], dest: dir, mv: false, names: ["bigcopy"] });
+  await until(() => !document.getElementById("progress")!.hidden, 3000);
+  check("progress panel shows", !document.getElementById("progress")!.hidden);
+  log("SHOT progress");
+  await invoke("op_cancel", { id }); await waitDone();
+  check("cancel reported", lastDone?.cancelled === true);
+  const left = await invoke<any[]>("list_dir", { path: `${dir}/bigcopy` }).catch(() => []);
+  check("cancelled copy left no .wcpart files", !left.some((e) => e.name.endsWith(".wcpart")), `${left.length} copied before cancel`);
+  un();
+};
+
 (async () => {
   const base: string = await invoke("selftest_dir");
   const which = (await invoke<string>("selftest_suites")).split(",").filter(Boolean);

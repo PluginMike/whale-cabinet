@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod jobs;
 mod listing;
+mod ops;
 mod settings;
 mod theme;
 
@@ -263,8 +265,22 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
     Ok(label)
 }
 
+/// PNG used as the cursor image when dragging files out to other apps.
+#[tauri::command]
+fn drag_icon() -> String {
+    let p = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("whale-cabinet/drag.png");
+    if !p.exists() {
+        let _ = std::fs::create_dir_all(p.parent().unwrap());
+        let _ = std::fs::write(&p, include_bytes!("../icons/32x32.png"));
+    }
+    p.to_string_lossy().into_owned()
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_drag::init())
+        .manage(jobs::Jobs::default())
+        .manage(jobs::Clip::default())
         .setup(|app| {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new()))));
@@ -275,7 +291,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             start_path, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
-            get_settings, set_settings, get_theme, open_dialog
+            get_settings, set_settings, get_theme, open_dialog, drag_icon,
+            jobs::op_transfer, jobs::op_delete, jobs::op_trash, jobs::op_undo, jobs::op_cancel, jobs::op_resolve,
+            jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
+            jobs::clip_set, jobs::clip_get
         ])
         .run(tauri::generate_context!())
         .expect("error while running Whale Cabinet");

@@ -9,6 +9,7 @@ if (dialog) {
   import("./dialog").then((m) => m.run(dialog, q.get("arg") ?? ""));
 } else {
   const app = await import("./app");
+  await import("./ops");
   await initTheme(app.applySettings);
   await app.start([{ loc: await invoke<string>("start_path") }]);
   if (import.meta.env.DEV && (await invoke<boolean>("selftest", {}))) import("./selftest");
