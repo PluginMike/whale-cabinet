@@ -5,6 +5,7 @@ mod listing;
 mod ops;
 mod preview;
 mod settings;
+mod tags;
 mod theme;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -35,8 +36,56 @@ struct Place {
 // ---------- browsing ----------
 
 #[tauri::command]
-async fn list_dir(path: String) -> R<Vec<listing::Entry>> {
-    blocking(move || listing::list_dir(Path::new(&path)).map_err(|e| format!("{path}: {e}"))).await?
+async fn list_dir(path: String, app: AppHandle) -> R<Vec<listing::Entry>> {
+    blocking(move || {
+        let mut v = listing::list_dir(Path::new(&path)).map_err(|e| format!("{path}: {e}"))?;
+        let store = app.state::<tags::Store>();
+        for e in &mut v {
+            e.tags = store.read(Path::new(&e.path));
+        }
+        // keep the tag index in step with what's on disk (catches tags changed by Dolphin)
+        store.observe(&v.iter().map(|e| (e.path.clone(), e.tags.clone())).collect::<Vec<_>>());
+        Ok(v)
+    })
+    .await?
+}
+
+// ---------- tags ----------
+
+#[tauri::command]
+async fn tags_edit(paths: Vec<String>, add: Vec<String>, remove: Vec<String>, app: AppHandle) -> R<Vec<Vec<String>>> {
+    blocking(move || app.state::<tags::Store>().edit(&paths, &add, &remove)).await?
+}
+
+#[tauri::command]
+async fn tag_meta(path: String, app: AppHandle) -> R<tags::Meta> {
+    blocking(move || {
+        let s = app.state::<tags::Store>();
+        tags::Meta { tags: s.read(Path::new(&path)), rating: s.rating(Path::new(&path)) }
+    })
+    .await
+}
+
+#[tauri::command]
+async fn set_rating(path: String, rating: u8, app: AppHandle) -> R<()> {
+    blocking(move || app.state::<tags::Store>().set_rating(Path::new(&path), rating)).await?
+}
+
+#[tauri::command]
+async fn tag_counts(app: AppHandle) -> R<Vec<(String, usize)>> {
+    blocking(move || app.state::<tags::Store>().counts()).await
+}
+
+#[tauri::command]
+async fn tag_items(tag: String, app: AppHandle) -> R<Vec<listing::Entry>> {
+    blocking(move || {
+        let s = app.state::<tags::Store>();
+        s.items(&tag)
+            .iter()
+            .filter_map(|p| listing::entry(p).map(|mut e| { e.tags = s.read(p); e }))
+            .collect()
+    })
+    .await
 }
 
 #[tauri::command]
@@ -304,13 +353,23 @@ fn main() {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new()))));
             app.manage(Settings(Mutex::new(settings::load())));
+            app.manage(tags::Store::new(settings::dir()));
+            // Seed the tag index from the home folder in the background (Dolphin-set tags included).
+            let hs = h.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(3));
+                if let Some(home) = dirs::home_dir() {
+                    hs.state::<tags::Store>().scan(&home, 12);
+                    let _ = hs.emit("tags-changed", ());
+                }
+            });
             watch_theme_files(h.clone());
             watch_hyprland(h);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             start_path, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
-            get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats,
+            get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             jobs::op_transfer, jobs::op_delete, jobs::op_trash, jobs::op_undo, jobs::op_cancel, jobs::op_resolve,
             jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
             jobs::clip_set, jobs::clip_get

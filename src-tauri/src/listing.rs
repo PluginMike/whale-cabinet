@@ -19,6 +19,8 @@ pub struct Entry {
     pub size: u64,
     /// Modification time, ms since epoch.
     pub mtime: i64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 // NOTE: non-UTF-8 names are shown lossily and can't be round-tripped; send raw bytes if that ever matters.
@@ -30,43 +32,51 @@ pub fn list_dir(dir: &Path) -> std::io::Result<Vec<Entry>> {
     for de in fs::read_dir(dir)? {
         let Ok(de) = de else { continue };
         let name = de.file_name().to_string_lossy().into_owned();
-        let path = de.path();
-        let Ok(lmeta) = fs::symlink_metadata(&path) else { continue };
-        let link = lmeta.file_type().is_symlink();
-        // Follow symlinks for type/size; a dangling link keeps its own metadata.
-        let (meta, broken) = if link {
-            match fs::metadata(&path) {
-                Ok(m) => (m, false),
-                Err(_) => (lmeta, true),
-            }
-        } else {
-            (lmeta, false)
-        };
-        let ft = meta.file_type();
-        let special = if ft.is_fifo() {
-            "fifo"
-        } else if ft.is_socket() {
-            "socket"
-        } else if ft.is_char_device() {
-            "char"
-        } else if ft.is_block_device() {
-            "block"
-        } else {
-            ""
-        };
-        out.push(Entry {
-            hidden: name.starts_with('.') || dot_hidden.contains(&name),
-            dir: ft.is_dir(),
-            size: if ft.is_file() { meta.len() } else { 0 },
-            mtime: meta.mtime() * 1000 + meta.mtime_nsec() / 1_000_000,
-            path: path.to_string_lossy().into_owned(),
-            name,
-            link,
-            broken,
-            special,
-        });
+        if let Some(mut e) = entry(&de.path()) {
+            e.hidden |= dot_hidden.contains(&name);
+            out.push(e);
+        }
     }
     Ok(out)
+}
+
+/// Stat one path into an Entry (symlinks followed for type/size; dangling links keep their own metadata).
+pub fn entry(path: &Path) -> Option<Entry> {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
+    let lmeta = fs::symlink_metadata(path).ok()?;
+    let link = lmeta.file_type().is_symlink();
+    let (meta, broken) = if link {
+        match fs::metadata(path) {
+            Ok(m) => (m, false),
+            Err(_) => (lmeta, true),
+        }
+    } else {
+        (lmeta, false)
+    };
+    let ft = meta.file_type();
+    let special = if ft.is_fifo() {
+        "fifo"
+    } else if ft.is_socket() {
+        "socket"
+    } else if ft.is_char_device() {
+        "char"
+    } else if ft.is_block_device() {
+        "block"
+    } else {
+        ""
+    };
+    Some(Entry {
+        hidden: name.starts_with('.'),
+        dir: ft.is_dir(),
+        size: if ft.is_file() { meta.len() } else { 0 },
+        mtime: meta.mtime() * 1000 + meta.mtime_nsec() / 1_000_000,
+        path: path.to_string_lossy().into_owned(),
+        name,
+        link,
+        broken,
+        special,
+        tags: vec![],
+    })
 }
 
 /// Turn user input from the location bar (or argv) into an existing absolute directory.

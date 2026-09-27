@@ -153,7 +153,7 @@ hooks.info.push((el, picked, p) => {
         });
       };
     }).catch((err) => { if (my === token) more.textContent = String(err); });
-    hooks.infoExtra.forEach((f) => f(el, e));
+    hooks.infoExtra.forEach((f) => f(el, [e]));
     return true;
   }
   previewOf(e, false).then((pv) => {
@@ -161,7 +161,7 @@ hooks.info.push((el, picked, p) => {
     const box = el.querySelector<HTMLElement>(".preview")!;
     box.replaceChildren(pv.el);
   });
-  hooks.infoExtra.forEach((f) => f(el, e));
+  hooks.infoExtra.forEach((f) => f(el, [e]));
   return true;
 });
 

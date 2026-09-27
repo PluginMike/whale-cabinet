@@ -48,6 +48,19 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
   "View source" toggles). Markdown is sanitized before it's shown.
 - Folders show their item count; "Calculate total size" walks the whole tree on demand.
 
+### Tags, colours, ratings (shared with Dolphin)
+
+- Tags live in the `user.xdg.tags` extended attribute (comma-separated), ratings in `user.baloo.rating`
+  (0–10, two per star) — exactly where Dolphin/Baloo keep them, so they carry over both ways.
+- A colour is a tag named `color:red` (any of red, orange, yellow, green, teal, blue, purple, pink, grey)
+  or `color:#rrggbb`; it shows as the folder's tab or the file's paper edge.
+- Filesystems without xattrs (FAT, some network mounts) fall back to `~/.config/whale-cabinet/tags.json`.
+- The sidebar's Tags section lists every tag with a count; click one to see everything tagged with it.
+  The index (`~/.config/whale-cabinet/tag-index.json`) is seeded by a background scan of your home folder
+  and kept current as you browse and edit.
+- Edit tags, colour and rating in the info panel (autocompletes known tags; works on a multi-selection),
+  or drag items onto a tag in the sidebar.
+
 ### Data safety
 
 - Copies go to a hidden temp file and are renamed into place, so a cancelled or failed copy never leaves a

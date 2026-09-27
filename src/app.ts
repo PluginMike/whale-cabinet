@@ -21,7 +21,7 @@ export const hooks: {
   thumb?: (e: Entry) => string | undefined;
   info: ((el: HTMLElement, picked: Entry[], p: Pane) => boolean)[];
   /** Extra sections appended to a single item's info panel (tags, rating…). */
-  infoExtra: ((el: HTMLElement, e: Entry) => void)[];
+  infoExtra: ((el: HTMLElement, es: Entry[]) => void)[];
   tagDrop?: (tag: string, paths: string[]) => void;
   dropMenu?: (x: number, y: number, pick: (copy: boolean) => void) => void;
   locTitle?: Record<string, (loc: string) => string>;
@@ -182,6 +182,7 @@ export function info(p = pane()) {
     const files = picked.filter((e) => !e.dir);
     el.innerHTML = `<div class="glyph">${glyph()}</div><h2>${picked.length} items selected</h2>` +
       dl([["Folders", String(picked.length - files.length)], ["Files", String(files.length)], ["Size", fmtSize(files.reduce((s, e) => s + e.size, 0))]]);
+    hooks.infoExtra.forEach((f) => f(el, picked));
   } else {
     const n = p.rows.filter((r) => r.depth === 0).length;
     const pairs: [string, string][] = [["Items", String(n)], ["Location", p.loc]];
