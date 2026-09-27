@@ -218,10 +218,12 @@ hooks.keys.push((ev, p) => {
 });
 
 // ---------- drag & drop ----------
-type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag"; path: string };
+type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag" | "place"; path: string };
 function targetAt(x: number, y: number): Target | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   if (!el) return null;
+  const add = el.closest<HTMLElement>(".sb-add");
+  if (add) return { el: add, kind: "place", path: "" };
   const tag = el.closest<HTMLElement>(".tagrow[data-tag]");
   if (tag) return { el: tag, kind: "tag", path: tag.dataset.tag! };
   const drawer = el.closest<HTMLElement>(".drawer[data-p]");
@@ -241,6 +243,7 @@ function hover(t: Target | null) {
 async function dropOn(t: Target, paths: string[], copy: boolean) {
   if (t.kind === "trash") { invoke("op_trash", { items: paths }); return; }
   if (t.kind === "tag") { hooks.tagDrop?.(t.path, paths); return; }
+  if (t.kind === "place") { const dirs = allPanes().flatMap((p) => p.selected()).filter((e) => e.dir && paths.includes(e.path)).map((e) => e.path); (dirs.length ? dirs : paths).forEach((d) => hooks.addPlace?.(d)); return; }
   if (paths.some((p) => t.path === p || t.path.startsWith(p + "/"))) { flash("Can't drop a folder into itself"); return; }
   if (!copy && paths.every((p) => parentOf(p) === t.path)) return; // already there
   transfer(paths, t.path, !copy);

@@ -161,6 +161,7 @@ export function fileMenu(p: Pane): Item[] {
   ];
   if ((files.length && !dirs.length) || one) list.push({ label: "Open With", sub: () => openWithItems(paths) });
   if (dirs.length) list.push({ label: dirs.length > 1 ? "Open in New Tabs" : "Open in New Tab", act: () => dirs.forEach((d) => newTab(d.path, false)) });
+  if (one?.dir) list.push({ label: "Add to Places", act: () => hooks.addPlace?.(one.path) });
   list.push({ label: "Open Terminal Here", kb: "Shift+F4", act: () => terminalAt(one?.dir ? one.path : dir || "/") });
   list.push("-",
     { label: "Cut", kb: "Ctrl+X", act: () => ops.copy(true) },

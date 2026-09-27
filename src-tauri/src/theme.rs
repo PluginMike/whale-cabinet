@@ -39,6 +39,8 @@ pub struct Theme {
     pub font_family: String,
     pub font_size: f64,
     pub icon_theme: String,
+    /// 16 ANSI colours for the embedded terminal (DMS dank16), empty = terminal defaults.
+    pub terminal: Vec<String>,
 }
 
 fn home() -> PathBuf {
@@ -158,6 +160,14 @@ pub fn load_dms() -> Option<(Roles, bool)> {
             (r, dark)
         })
     })
+}
+
+/// DMS's `dank16` terminal palette (color0…color15) for the given mode.
+pub fn parse_dank16(text: &str, dark: bool) -> Vec<String> {
+    let v: Value = serde_json::from_str(text).unwrap_or(Value::Null);
+    let d = &v["dank16"];
+    let out: Vec<String> = (0..16).filter_map(|i| d[format!("color{i}")][if dark { "dark" } else { "light" }].as_str().map(str::to_owned)).collect();
+    if out.len() == 16 { out } else { vec![] }
 }
 
 // ---------- colour maths (OKLab/OKLCH) ----------
@@ -402,7 +412,8 @@ pub fn load(source: &str, custom_seed: Option<&str>, custom_dark: bool) -> Theme
         _ => ("builtin", Roles::new(), false),
     };
     let tags = roles.get("primary").map(|p| harmonized_tags(p, dark)).unwrap_or_else(|| PRESETS.iter().map(|(n, c)| (n.to_string(), c.to_string())).collect());
-    Theme { source: source.into(), dark, roles, tags, hypr, font_family: family, font_size: size, icon_theme: icon_theme() }
+    let terminal = if source == "dms" { std::fs::read_to_string(dms_colors_json()).map(|t| parse_dank16(&t, dark)).unwrap_or_default() } else { vec![] };
+    Theme { source: source.into(), dark, roles, tags, hypr, font_family: family, font_size: size, icon_theme: icon_theme(), terminal }
 }
 
 #[cfg(test)]
@@ -417,6 +428,17 @@ mod tests {
         assert_eq!(r["primary"], "#6b4fa0");
         assert_eq!(r["surface"], "#fff7fe");
         assert!(parse_dms_json("not json").is_none());
+    }
+
+    #[test]
+    fn dank16_palette() {
+        let mut j = serde_json::json!({"dank16": {}});
+        for i in 0..16 {
+            j["dank16"][format!("color{i}")] = serde_json::json!({"dark": format!("#0000{i:02x}"), "light": "#ffffff"});
+        }
+        let p = parse_dank16(&j.to_string(), true);
+        assert_eq!((p.len(), p[15].as_str()), (16, "#00000f"));
+        assert!(parse_dank16("{}", true).is_empty());
     }
 
     #[test]

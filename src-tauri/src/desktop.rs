@@ -313,7 +313,7 @@ fn parse_globs2(t: &str, g: &mut Globs) {
     }
 }
 
-fn glob_match(pat: &str, name: &str) -> bool {
+pub fn glob_match(pat: &str, name: &str) -> bool {
     // tiny fnmatch for the few complex globs (e.g. "[Mm]akefile", "*.[1-9]")
     fn m(p: &[char], n: &[char]) -> bool {
         match p.first() {

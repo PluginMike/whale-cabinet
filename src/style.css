@@ -58,6 +58,9 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 }
 #app.noinfo { grid-template-columns: 196px 1fr 0; }
 #app.noinfo #info { display: none; }
+#app.noside { grid-template-columns: 0 1fr 280px; }
+#app.noside.noinfo { grid-template-columns: 0 1fr 0; }
+#app.noside #sidebar { display: none; }
 
 /* ---------- optional compact titlebar ---------- */
 #titlebar { grid-area: title; display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 12px; background: var(--body); color: var(--on-body); font-size: 12px; }
@@ -138,6 +141,13 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 .items { position: absolute; top: 0; left: 0; right: 0; }
 .empty { position: absolute; inset: 40% 0 auto; text-align: center; color: var(--muted); pointer-events: none; }
 .band { position: absolute; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); pointer-events: none; z-index: 3; }
+#searchbar { display: flex; gap: 10px; align-items: center; padding: 6px var(--pad); background: var(--bar); border-bottom: 1px solid var(--divider); font-size: .95em; flex: none; }
+#searchbar #sq { flex: 1; height: 28px; padding: 0 8px; outline: var(--ring-w) solid var(--ring); }
+#searchbar label { display: flex; gap: 4px; align-items: center; }
+#searchbar select, #searchbar button { height: 28px; border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); cursor: pointer; }
+.drawer.unmounted { opacity: .7; }
+.drawer.unmounted .label { border-style: dashed; }
+#termpanel .xterm { height: 100%; }
 #termpanel { height: 240px; flex: none; border-top: 1px solid var(--divider); background: var(--body); padding: 4px 0 0 6px; }
 
 /* ---------- items: cabinet list ---------- */
@@ -146,6 +156,8 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 .item .meta { color: var(--muted); font-size: .92em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .item .size { width: 72px; text-align: right; margin-left: auto; }
 .item .date { width: 132px; text-align: right; margin-left: 16px; }
+.item .where { margin-left: auto; max-width: 38%; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.where + .tagdots, .where + .size { margin-left: 14px; }
 .tagdots { margin-left: auto; display: flex; gap: 3px; }
 .tagdots + .size { margin-left: 10px; }
 .tagdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: .8; }

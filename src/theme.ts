@@ -6,7 +6,7 @@ export type Theme = {
   source: "dms" | "builtin" | "custom"; dark: boolean;
   roles: Record<string, string>; tags: Record<string, string>;
   hypr: { running: boolean; rounding: number; gaps_in: number; gaps_out: number; border_size: number; border_colors: string[]; border_angle: number; blur: boolean };
-  font_family: string; font_size: number; icon_theme: string;
+  font_family: string; font_size: number; icon_theme: string; terminal: string[];
 };
 export type Settings = Record<string, any>;
 

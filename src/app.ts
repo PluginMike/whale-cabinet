@@ -24,6 +24,7 @@ export const hooks: {
   infoExtra: ((el: HTMLElement, es: Entry[]) => void)[];
   tagDrop?: (tag: string, paths: string[]) => void;
   dropMenu?: (x: number, y: number, pick: (copy: boolean) => void) => void;
+  addPlace?: (path: string) => void;
   locTitle?: Record<string, (loc: string) => string>;
   open?: (e: Entry, p: Pane) => void;
   onNavigate?: (p: Pane) => void;
@@ -240,7 +241,7 @@ export type PlaceItem = { name: string; path: string };
 export const drawerHtml = (p: PlaceItem, extra = "") =>
   `<div class="drawer" data-p="${esc(p.path)}" title="${esc(p.path)}"><span class="label">${esc(p.name)}</span><span class="handle"></span>${extra}</div>`;
 export function renderPlaces(list: PlaceItem[]) {
-  $("places").innerHTML = list.map((p) => drawerHtml(p)).join("") + drawerHtml({ name: "Trash", path: "trash:/" });
+  $("places").innerHTML = list.map((p) => drawerHtml(p)).join("");
   chrome();
 }
 $("sidebar").addEventListener("click", (ev) => {
@@ -264,7 +265,14 @@ window.addEventListener("keydown", (ev) => {
   if (c && lk === "t") { stop(); newTab(isFolder(p.loc) ? p.loc : HOME); return; }
   if (c && lk === "w") { stop(); closeTab(); return; }
   if (c && k === "Tab") { stop(); cur = (cur + (ev.shiftKey ? tabs.length - 1 : 1)) % tabs.length; showTab(); return; }
-  if (c && ["1", "2", "3"].includes(k)) { stop(); p.setView((["cabinet", "compact", "grid"] as View[])[+k - 1]); return; }
+  // Dolphin: Ctrl+1 icons, Ctrl+2 compact, Ctrl+3 details (our cabinet list)
+  if (c && ["1", "2", "3"].includes(k)) { stop(); p.setView((["grid", "compact", "cabinet"] as View[])[+k - 1]); return; }
+  if (c && k === "PageDown") { stop(); cur = (cur + 1) % tabs.length; showTab(); return; }
+  if (c && k === "PageUp") { stop(); cur = (cur + tabs.length - 1) % tabs.length; showTab(); return; }
+  if (c && lk === "q") { stop(); getCurrentWindow().close(); return; }
+  if (ev.altKey && k === ".") { stop(); toggleHidden(); return; }
+  if (k === "F6") { stop(); editPath(); return; }
+  if (k === "F9") { stop(); const sb = $("sidebar"); sb.hidden = !sb.hidden; $("app").classList.toggle("noside", sb.hidden); return; }
   if (c && (k === "+" || k === "=")) { stop(); p.setZoom(p.zoom * 1.1); return; }
   if (c && k === "-") { stop(); p.setZoom(p.zoom / 1.1); return; }
   if (c && k === "0") { stop(); p.setZoom(1); return; }
@@ -310,5 +318,4 @@ export async function start(initial: { loc: string; select?: string }[]) {
   listen<string[]>("fs-change", ({ payload }) => allPanes().forEach((p) => p.onFsChange(payload)));
   for (const t of initial) newTab(t.loc, true, t.select);
   $("app").hidden = false;
-  invoke<PlaceItem[]>("places").then(renderPlaces);
 }

@@ -48,6 +48,19 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
   "View source" toggles). Markdown is sanitized before it's shown.
 - Folders show their item count; "Calculate total size" walks the whole tree on demand.
 
+### Tabs, split view, terminal, search, Places, devices
+
+- Tabs and a split view (F3) like Dolphin; each view has its own history, view mode and zoom.
+- F4 opens a terminal (your `$SHELL` in a PTY) under the view, coloured from DMS's terminal palette. It `cd`s along
+  as you browse — but only while the shell is idle at its prompt, never into a running program.
+- Ctrl+F searches recursively from here, your home, or everywhere, by name or by content (text files up to 20 MB);
+  results stream in and show where each item lives.
+- Places are read from and written to `~/.local/share/user-places.xbel`, so Dolphin and KDE/Qt file dialogs see
+  the same bookmarks. Drag a folder onto "+ Drop a folder here" (or right-click → Add to Places), drag drawers to
+  reorder, right-click a drawer to rename or remove it. Edits made in Dolphin show up live.
+- Devices lists removable and extra drives (via `lsblk`) and network/FUSE mounts; click to mount (udisks2, polkit
+  may ask), ⏏ to unmount or safely remove.
+
 ### Right-click menu, Open With, Properties
 
 - The context menu has Open, **Open With** (apps registered for the file type from `.desktop` files and
@@ -91,8 +104,8 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 | Alt+← / Alt+→ / mouse back/forward | Back / Forward |
 | Alt+↑, Backspace | Up |
 | Alt+Home | Home |
-| Ctrl+L | Edit location |
-| Ctrl+H | Show hidden files |
+| Ctrl+L, F6 | Edit location |
+| Ctrl+H, Alt+. | Show hidden files |
 | Ctrl+I, or just type | Filter |
 | ↑ ↓ PgUp PgDn Home End | Move (Shift extends, Ctrl moves focus only) |
 | Ctrl+Space | Toggle focused item |
@@ -112,6 +125,15 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 | Menu key, Shift+F10 | Context menu |
 | Alt+Enter | Properties |
 | Shift+F4 | Open terminal here |
+| Ctrl+T / Ctrl+W | New tab / close tab (middle-click a folder or drawer: open in a tab) |
+| Ctrl+Tab, Ctrl+PgDn / Ctrl+Shift+Tab, Ctrl+PgUp | Next / previous tab |
+| F3 | Split view |
+| F4 | Terminal panel (follows the folder) |
+| F9 | Show/hide the sidebar |
+| Ctrl+F | Search (names, `*`/`?` globs; optional content search) |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 | Icons / compact / cabinet list |
+| Ctrl+scroll, Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in / out / reset |
+| Ctrl+Q | Quit |
 | Space | Quick Look (←/→ flip through files, Esc closes) |
 | F11 | Show/hide the info panel |
 

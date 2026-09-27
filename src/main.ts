@@ -13,6 +13,9 @@ if (dialog) {
   await import("./preview");
   await import("./tags");
   await import("./menu");
+  await import("./sidebar");
+  await import("./search");
+  await import("./term");
   await initTheme(app.applySettings);
   await app.start([{ loc: await invoke<string>("start_path") }]);
   if (import.meta.env.DEV && (await invoke<boolean>("selftest", {}))) import("./selftest");

@@ -3,11 +3,15 @@
 mod desktop;
 mod jobs;
 mod listing;
+mod mounts;
 mod ops;
+mod places;
 mod preview;
 mod props;
+mod search;
 mod settings;
 mod tags;
+mod term;
 mod theme;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -450,6 +454,101 @@ async fn checksum(path: String, algo: String) -> R<String> {
     blocking(move || props::checksum(Path::new(&path), &algo)).await?
 }
 
+// ---------- places (user-places.xbel) ----------
+
+#[tauri::command]
+fn places_list() -> Vec<places::Place> {
+    let text = places::read();
+    if text.trim().is_empty() {
+        // No xbel yet: offer the usual folders (the file is created on the first edit).
+        return places().into_iter().map(|p| places::Place { href: jobs::to_uri(&p.path), title: p.name.into(), path: p.path, icon: String::new(), hidden: false, system: true }).collect();
+    }
+    places::parse(&text)
+}
+fn edit_places(f: impl FnOnce(String) -> String) -> R<()> {
+    let text = places::read();
+    let text = if text.trim().is_empty() {
+        // seed from the defaults so the first edit doesn't lose them
+        places().iter().fold(places::EMPTY.to_owned(), |t, p| places::add(&t, &p.path, p.name, None))
+    } else {
+        text
+    };
+    places::write(&f(text))
+}
+#[tauri::command]
+fn places_add(path: String, title: String, index: Option<usize>) -> R<()> {
+    edit_places(|t| places::add(&t, &path, &title, index))
+}
+#[tauri::command]
+fn places_remove(href: String) -> R<()> {
+    edit_places(|t| places::remove(&t, &href))
+}
+#[tauri::command]
+fn places_move(href: String, to: usize) -> R<()> {
+    edit_places(|t| places::reorder(&t, &href, to))
+}
+#[tauri::command]
+fn places_rename(href: String, title: String) -> R<()> {
+    edit_places(|t| places::rename(&t, &href, &title))
+}
+
+/// Tell the UI when Dolphin (or anyone) edits user-places.xbel.
+fn watch_places(app: AppHandle) {
+    let target = places::xbel_path();
+    let Some(dir) = target.parent().map(Path::to_path_buf) else { return };
+    let (tx, rx) = mpsc::channel::<()>();
+    let t2 = target.clone();
+    let Ok(mut w) = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(ev) = res {
+            if !matches!(ev.kind, notify::EventKind::Access(_)) && ev.paths.iter().any(|p| p == &t2) {
+                let _ = tx.send(());
+            }
+        }
+    }) else { return };
+    let _ = w.watch(&dir, RecursiveMode::NonRecursive);
+    std::thread::spawn(move || {
+        let _keep = w;
+        while rx.recv().is_ok() {
+            std::thread::sleep(Duration::from_millis(100));
+            while rx.try_recv().is_ok() {}
+            let _ = app.emit("places-changed", ());
+        }
+    });
+}
+
+// ---------- devices ----------
+
+#[tauri::command]
+async fn devices_list() -> R<Vec<mounts::Device>> {
+    blocking(mounts::list).await
+}
+#[tauri::command]
+async fn device_mount(id: String) -> R<String> {
+    blocking(move || mounts::mount(&id)).await?
+}
+#[tauri::command]
+async fn device_unmount(dev: mounts::Device) -> R<()> {
+    blocking(move || mounts::unmount(&dev)).await?
+}
+#[tauri::command]
+async fn device_eject(dev: mounts::Device) -> R<()> {
+    blocking(move || mounts::eject(&dev)).await?
+}
+/// NOTE: polls lsblk/mountinfo every 2 s; switch to a udev/UDisks2 D-Bus signal watch if that ever shows up in profiles.
+fn watch_devices(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut last = mounts::list();
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let now = mounts::list();
+            if now != last {
+                let _ = app.emit("devices", &now);
+                last = now;
+            }
+        }
+    });
+}
+
 /// PNG used as the cursor image when dragging files out to other apps.
 #[tauri::command]
 fn drag_icon() -> String {
@@ -466,6 +565,8 @@ fn main() {
         .plugin(tauri_plugin_drag::init())
         .manage(jobs::Jobs::default())
         .manage(jobs::Clip::default())
+        .manage(term::Terms::default())
+        .manage(search::Searches::default())
         .setup(|app| {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new()))));
@@ -481,6 +582,8 @@ fn main() {
                 }
             });
             watch_theme_files(h.clone());
+            watch_places(h.clone());
+            watch_devices(h.clone());
             watch_hyprland(h);
             Ok(())
         })
@@ -489,6 +592,8 @@ fn main() {
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,
+            places_list, places_add, places_remove, places_move, places_rename, devices_list, device_mount, device_unmount, device_eject,
+            term::term_open, term::term_write, term::term_resize, term::term_cd, term::term_close, search::search_start, search::search_cancel,
             jobs::op_transfer, jobs::op_delete, jobs::op_trash, jobs::op_undo, jobs::op_cancel, jobs::op_resolve,
             jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
             jobs::clip_set, jobs::clip_get

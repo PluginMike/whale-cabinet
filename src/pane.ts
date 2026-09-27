@@ -227,7 +227,9 @@ export class Pane {
       const badge = `<span class="badge">${esc((ext(e) || e.special).slice(0, 5)) || "—"}</span>`;
       const tags = e.tags?.filter((t) => !t.startsWith("color:")).length ? `<span class="tagdots">${e.tags!.filter((t) => !t.startsWith("color:")).slice(0, 3).map((t) => `<i title="${esc(t)}"></i>`).join("")}</span>` : "";
       const size = e.dir ? "" : e.special || e.broken ? "" : fmtSize(e.size);
-      const meta = `${tags}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
+      // virtual views (search, tags, trash) mix folders: show where each item lives
+      const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";
+      const meta = `${where}${tags}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
       if (g.grid) {
         const art = e.dir ? `<div class="gfold grab"></div>` : thumb ? `<img class="gthumb grab" src="${thumb}" loading="lazy" draggable="false">` : `<div class="gpaper grab">${badge}</div>`;
         html += `<div class="${cls.join(" ")}" data-i="${i}" style="${style}">${art}${name}</div>`;
