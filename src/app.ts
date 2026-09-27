@@ -19,6 +19,7 @@ export const hooks: {
   drag?: (p: Pane, ev: MouseEvent) => void;
   virtual?: Record<string, (loc: string, p: Pane) => Promise<Entry[]>>;
   thumb?: (e: Entry) => string | undefined;
+  count?: (e: Entry) => string | undefined;
   info: ((el: HTMLElement, picked: Entry[], p: Pane) => boolean)[];
   /** Extra sections appended to a single item's info panel (tags, rating…). */
   infoExtra: ((el: HTMLElement, es: Entry[]) => void)[];
@@ -43,6 +44,7 @@ export function flash(msg: string) {
 export const host: Host = {
   showHidden: false,
   singleClick: false,
+  dblExpand: false,
   activate(p) {
     const t = tab(), i = t.panes.indexOf(p);
     if (i >= 0 && i !== t.active) { t.active = i; showTab(); }
@@ -61,6 +63,7 @@ export const host: Host = {
     return f ? f(loc, p) : Promise.reject(`Unknown location ${loc}`);
   },
   thumb(e) { return hooks.thumb?.(e); },
+  count(e) { return hooks.count?.(e); },
   syncWatch() { invoke("watch", { paths: [...new Set(tabs.flatMap((t) => t.panes.flatMap((p) => p.watched())))] }); },
   flash,
 };
@@ -68,8 +71,8 @@ export const host: Host = {
 function makePane(loc: string, select?: string) {
   const p = new Pane(host);
   p.view = (settings.view as View) || "cabinet";
-  p.zoom = +settings.zoom || 1;
   p.el.dataset.view = p.view;
+  p.setZoom(+settings.zoom || 1);
   const nav = p.navigate.bind(p);
   p.navigate = async (l, push, sel) => { const r = nav(l, push, sel); hooks.onNavigate?.(p); return r; };
   p.navigate(loc, true, select);
@@ -140,7 +143,7 @@ function chrome() {
   document.querySelectorAll<HTMLElement>(".drawer").forEach((d) => d.classList.toggle("active", d.dataset.p === p.loc));
   status(p);
   info(p);
-  document.title = `${locTitle(p.loc)} — Whale Cabinet`;
+  document.title = `${(window as any).WCTEST ? "WCTEST " : ""}${locTitle(p.loc)} — Whale Cabinet`;
 }
 
 function renderCrumbs(p: Pane) {
@@ -169,8 +172,8 @@ export function glyph(e?: Entry) {
   return !e || e.dir ? `<div class="gf" style="${e ? `--edge:${edgeColor(e)}` : ""}"></div>` : `<div class="gp" style="--edge:${edgeColor(e)}"><span class="badge">${esc(ext(e).slice(0, 5)) || "—"}</span></div>`;
 }
 export function info(p = pane()) {
-  const el = $("info");
-  if (el.hidden) return;
+  if ($("info").hidden) return;
+  const el = $("info-body");
   const picked = p.selected();
   for (const h of hooks.info) if (h(el, picked, p)) return;
   if (picked.length === 1) {
@@ -191,6 +194,25 @@ export function info(p = pane()) {
     el.innerHTML = `<div class="glyph">${glyph()}</div><h2>${esc(locTitle(p.loc))}</h2>${dl(pairs)}`;
   }
 }
+
+// ---------- info panel: drag its left edge to resize (width saved in settings) ----------
+$("info-grip").addEventListener("mousedown", (ev) => {
+  ev.preventDefault();
+  const startX = ev.clientX, startW = $("info").getBoundingClientRect().width;
+  let w = startW;
+  document.body.classList.add("resizing");
+  const move = (m: MouseEvent) => {
+    w = Math.max(260, Math.min(innerWidth * 0.7, startW + (startX - m.clientX)));
+    document.documentElement.style.setProperty("--info-w", `${Math.round(w)}px`);
+  };
+  const up = () => {
+    window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+    document.body.classList.remove("resizing");
+    invoke("set_settings", { patch: { infoWidth: Math.round(w) } });
+  };
+  window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+});
+$("info-grip").addEventListener("dblclick", () => { document.documentElement.style.setProperty("--info-w", "420px"); invoke("set_settings", { patch: { infoWidth: 420 } }); });
 
 // ---------- location bar ----------
 const crumbs = $("crumbs"), pathedit = $<HTMLInputElement>("pathedit"), filterEl = $<HTMLInputElement>("filter");
@@ -305,10 +327,17 @@ $("tb-min").onclick = () => win.minimize();
 $("tb-max").onclick = () => win.toggleMaximize();
 $("tb-close").onclick = () => win.close();
 
+let settings0: Settings = {};
 export function applySettings(s: Settings) {
   const first = !Object.keys(settings).length;
   settings = s;
   host.singleClick = !!s.singleClick;
+  host.dblExpand = s.folderDblClick === "expand";
+  // the Item size slider applies to every open view
+  if (!first && +s.zoom !== +settings0.zoom) allPanes().forEach((p) => p.setZoom(+s.zoom || 1));
+  settings0 = s;
+  const iw = Math.max(260, Math.min(1400, +s.infoWidth || 420));
+  document.documentElement.style.setProperty("--info-w", `${iw}px`);
   $("titlebar").hidden = !s.titlebar;
   if (first) toggleHidden(!!s.showHidden);
 }

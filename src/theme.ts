@@ -84,7 +84,7 @@ export function applyTheme(t: Theme, s: Settings) {
   }
   if (t.font_family) {
     set("--font", `"${t.font_family}", system-ui, sans-serif`);
-    set("--fs", `${Math.round(t.font_size * 1.2 * 10) / 10}px`);
+    set("--fs", `${Math.round(t.font_size * 4 / 3 * 10) / 10}px`); // pt → px
   }
   document.documentElement.dataset.theme = t.source;
 }

@@ -18,7 +18,9 @@ pub fn defaults() -> Map<String, Value> {
         "showHidden": false,
         "singleClick": false,
         "infoPanel": true,
-        "zoom": 1.0,
+        "zoom": 1.0,               // item size (1.0 = the default "large" cabinet)
+        "folderDblClick": "open",  // open (Windows style) | expand (pull out inline)
+        "infoWidth": 420,          // info panel width, px (drag its edge)
         "terminal": ""             // empty = auto-detect
     })
     .as_object()

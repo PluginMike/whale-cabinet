@@ -7,6 +7,8 @@ type Row = { e: Entry; depth: number; parent: string };
 export interface Host {
   showHidden: boolean;
   singleClick: boolean;
+  /** Double-clicking a folder pulls it out inline (cabinet style) instead of opening it (Windows style). */
+  dblExpand: boolean;
   activate(p: Pane): void;
   changed(p: Pane): void;
   open(e: Entry, p: Pane): void;
@@ -15,6 +17,8 @@ export interface Host {
   startDrag(p: Pane, ev: MouseEvent): void;
   loadVirtual(loc: string, p: Pane): Promise<Entry[]>;
   thumb(e: Entry): string | undefined;
+  /** "12 items" for a folder, loaded lazily. */
+  count(e: Entry): string | undefined;
   syncWatch(): void;
   flash(msg: string): void;
 }
@@ -70,10 +74,10 @@ export class Pane {
   geom() {
     const z = this.zoom;
     if (this.view === "grid") {
-      const w = Math.round(116 * z), h = Math.round(124 * z);
+      const w = Math.round(156 * z), h = Math.round(168 * z);
       return { grid: true, w, h, cols: Math.max(1, Math.floor((this.scroller.clientWidth - PAD * 2) / w)), rowH: h };
     }
-    const rowH = Math.round((this.view === "compact" ? 26 : 36) * z);
+    const rowH = Math.round((this.view === "compact" ? 36 : 54) * z);
     return { grid: false, w: 0, h: rowH, cols: 1, rowH };
   }
   private layout() {
@@ -81,7 +85,12 @@ export class Pane {
     this.spacer.style.height = `${Math.ceil(this.rows.length / g.cols) * g.rowH + PAD * 2 + 16}px`;
     this.render();
   }
-  setZoom(z: number) { this.zoom = Math.max(0.6, Math.min(2.5, z)); this.layout(); this.host.changed(this); }
+  setZoom(z: number) {
+    this.zoom = Math.max(0.5, Math.min(2.5, z));
+    this.el.style.setProperty("--z", String(this.zoom));
+    this.layout();
+    this.host.changed(this);
+  }
   setView(v: View) {
     this.view = v;
     if (v === "grid") { for (const p of this.expanded) this.cache.delete(p); this.expanded.clear(); this.host.syncWatch(); }
@@ -226,7 +235,7 @@ export class Pane {
       const thumb = !e.dir ? this.host.thumb(e) : undefined;
       const badge = `<span class="badge">${esc((ext(e) || e.special).slice(0, 5)) || "—"}</span>`;
       const tags = e.tags?.filter((t) => !t.startsWith("color:")).length ? `<span class="tagdots">${e.tags!.filter((t) => !t.startsWith("color:")).slice(0, 3).map((t) => `<i title="${esc(t)}"></i>`).join("")}</span>` : "";
-      const size = e.dir ? "" : e.special || e.broken ? "" : fmtSize(e.size);
+      const size = e.dir ? (e.trashId ? "" : this.host.count(e) ?? "") : e.special || e.broken ? "" : fmtSize(e.size);
       // virtual views (search, tags, trash) mix folders: show where each item lives
       const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";
       const meta = `${where}${tags}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
@@ -355,7 +364,9 @@ export class Pane {
     const i = this.rowAt(ev.target);
     if (i < 0) { if (this.host.singleClick) return; if (!(ev.target as HTMLElement).closest(".item")) this.goUp(); return; }
     if ((ev.target as HTMLElement).classList.contains("chev") || this.host.singleClick) return;
-    this.host.open(this.rows[i].e, this);
+    const e = this.rows[i].e;
+    if (e.dir && this.host.dblExpand && this.view !== "grid" && !e.trashId) { this.toggleExpand(e.path); return; }
+    this.host.open(e, this);
   }
 
   // ---------- keyboard ----------

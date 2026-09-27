@@ -8,6 +8,8 @@ if (dialog) {
   initTheme();
   import("./dialog").then((m) => m.run(dialog, q.get("arg") ?? ""));
 } else {
+  // isolated test runs keep "WCTEST" in window titles (see src-tauri isolated())
+  if (import.meta.env.DEV) (window as any).WCTEST = await invoke<boolean>("selftest", {});
   const app = await import("./app");
   await import("./ops");
   await import("./preview");

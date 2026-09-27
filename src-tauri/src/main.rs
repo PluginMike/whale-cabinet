@@ -132,6 +132,18 @@ fn selftest_dir() -> String {
     std::env::var("WC_SELFTEST").unwrap_or_default()
 }
 
+/// Dev-only REPL: returns (and removes) $WC_SELFTEST/cmd.js so a driver script can poke the running UI.
+#[tauri::command]
+fn selftest_cmd() -> Option<String> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let p = PathBuf::from(std::env::var_os("WC_SELFTEST")?).join("cmd.js");
+    let s = std::fs::read_to_string(&p).ok()?;
+    let _ = std::fs::remove_file(&p);
+    Some(s)
+}
+
 #[tauri::command]
 fn selftest_suites() -> String {
     std::env::var("WC_SUITES").unwrap_or_default()
@@ -304,6 +316,7 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
     let (tx, rx) = mpsc::channel();
     let (l, a) = (label.clone(), app.clone());
     app.run_on_main_thread(move || {
+        let title = if isolated() { format!("WCTEST {title}") } else { title };
         let r = WebviewWindowBuilder::new(&a, &l, WebviewUrl::App(url.into()))
             .title(title)
             .inner_size(width, height)
@@ -328,6 +341,17 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
 #[tauri::command]
 async fn thumbnail(path: String, size: u32) -> R<String> {
     blocking(move || preview::thumbnail(&preview::cache_root(), Path::new(&path), size).map(|p| p.to_string_lossy().into_owned())).await?
+}
+
+/// Number of entries in a folder (hidden ones only when asked), for the "12 items" column.
+#[tauri::command]
+async fn dir_count(path: String, hidden: bool) -> R<u32> {
+    blocking(move || {
+        std::fs::read_dir(&path)
+            .map(|rd| rd.flatten().filter(|e| hidden || !e.file_name().to_string_lossy().starts_with('.')).count() as u32)
+            .map_err(|e| e.to_string())
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -562,10 +586,17 @@ fn drag_icon() -> String {
     p.to_string_lossy().into_owned()
 }
 
+/// Dev test runs (WC_SELFTEST) stay isolated: no single-instance hand-off, no D-Bus name, so they never touch
+/// a Whale Cabinet the user is running.
+fn isolated() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("WC_SELFTEST").is_some()
+}
+
 fn main() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    if !isolated() {
         // Must be first: a second `whale-cabinet …` hands its arguments to this process and exits.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let mut targets = listing::parse_args(argv.get(1..).unwrap_or(&[]), Path::new(&cwd));
             if targets.is_empty() {
                 targets.push(home_target());
@@ -575,7 +606,9 @@ fn main() {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
-        }))
+        }));
+    }
+    builder
         .plugin(tauri_plugin_drag::init())
         .manage(jobs::Jobs::default())
         .manage(jobs::Clip::default())
@@ -597,7 +630,7 @@ fn main() {
             });
             watch_theme_files(h.clone());
             // "Show in folder" from other apps (org.freedesktop.FileManager1)
-            let bus = match fm1::serve(h.clone()) {
+            let bus = match if isolated() { Err("isolated test run".into()) } else { fm1::serve(h.clone()) } {
                 Ok(c) => Some(c),
                 Err(e) => {
                     eprintln!("whale-cabinet: FileManager1 D-Bus service unavailable: {e}");
@@ -611,8 +644,8 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
-            get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
+            start_args, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,
             places_list, places_add, places_remove, places_move, places_rename, devices_list, device_mount, device_unmount, device_eject,
@@ -621,6 +654,16 @@ fn main() {
             jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
             jobs::clip_set, jobs::clip_get
         ])
-        .run(tauri::generate_context!())
+        .run({
+            let mut ctx = tauri::generate_context!();
+            if isolated() {
+                // Test windows are titled "WCTEST…" before they map, so a title rule can route them to a
+                // throwaway monitor without ever matching the user's own Whale Cabinet windows.
+                for w in &mut ctx.config_mut().app.windows {
+                    w.title = "WCTEST Whale Cabinet".into();
+                }
+            }
+            ctx
+        })
         .expect("error while running Whale Cabinet");
 }

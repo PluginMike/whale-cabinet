@@ -45,6 +45,9 @@ async function settingsDialog() {
       <fieldset><legend>Browsing</legend>
         <label>Default view <select name="view">${["cabinet", "compact", "grid"].map((v) => `<option ${s.view === v ? "selected" : ""} value="${v}">${v === "grid" ? "Icons" : v[0].toUpperCase() + v.slice(1)}</option>`).join("")}</select></label>
         <label><input type="checkbox" name="showHidden" ${s.showHidden ? "checked" : ""}> Show hidden files by default</label>
+        <label>Item size <input type="range" name="zoom" min="0.6" max="2" step="0.05" value="${s.zoom}"> <output>${Math.round(s.zoom * 100)}%</output></label>
+        <div class="mini-h">Double-clicking a folder</div>
+        ${radio("folderDblClick", "open", "Opens it (Windows style)")} ${radio("folderDblClick", "expand", "Pulls it out inline (cabinet style)")}
         <label><input type="checkbox" name="singleClick" ${s.singleClick ? "checked" : ""}> Single click opens items</label>
         <label>Terminal <input name="terminal" placeholder="auto (kitty, foot, ghostty, alacritty…)" value="${esc(s.terminal ?? "")}"></label>
       </fieldset>

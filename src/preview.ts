@@ -4,7 +4,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
 import { $, Entry, invoke, esc, shown, ext, kindOf, parentOf, fmtSize, fmtDate, typeName, assetUrl } from "./util";
-import { hooks, pane, allPanes, dl, glyph, flash } from "./app";
+import { hooks, pane, allPanes, dl, glyph, flash, host } from "./app";
 
 const THUMB_KINDS = new Set(["img", "vid"]);
 const canThumb = (e: Entry) => !e.dir && !e.special && !e.broken && !e.trashId && (THUMB_KINDS.has(kindOf(e)) || ext(e) === "pdf") && ext(e) !== "svg";
@@ -38,6 +38,34 @@ hooks.thumb = (e) => {
     queue.push({ key: k, path: e.path, size });
     if (queue.length > 300) queue.shift(); // NOTE: drop the oldest when flinging through huge folders
     pump();
+  }
+};
+
+// ---------- folder item counts ("12 items"), lazily like thumbnails ----------
+const counts = new Map<string, string | null>();
+const countQueue: { key: string; path: string }[] = [];
+let countRunning = 0;
+function pumpCounts() {
+  while (countRunning < 6 && countQueue.length) {
+    const job = countQueue.pop()!;
+    countRunning++;
+    invoke<number>("dir_count", { path: job.path, hidden: host.showHidden })
+      .then((n) => counts.set(job.key, n === 1 ? "1 item" : `${n.toLocaleString()} items`))
+      .catch(() => counts.set(job.key, null))
+      .finally(() => {
+        countRunning--;
+        pumpCounts();
+        if (!rerender) rerender = requestAnimationFrame(() => { rerender = 0; allPanes().forEach((p) => p.render()); });
+      });
+  }
+}
+hooks.count = (e) => {
+  const k = `${e.path}\0${e.mtime}\0${host.showHidden}`;
+  if (counts.has(k)) return counts.get(k) ?? undefined;
+  if (!countQueue.some((q) => q.key === k)) {
+    countQueue.push({ key: k, path: e.path });
+    if (countQueue.length > 300) countQueue.shift();
+    pumpCounts();
   }
 };
 
@@ -160,6 +188,14 @@ hooks.info.push((el, picked, p) => {
     if (my !== token || !pv) return;
     const box = el.querySelector<HTMLElement>(".preview")!;
     box.replaceChildren(pv.el);
+    const big = document.createElement("button");
+    big.className = "pv-big";
+    big.textContent = "⤢ Open large";
+    big.title = "Open this preview full size (Space)";
+    big.onclick = () => showQL();
+    let tools = box.querySelector(".pv-tools");
+    if (!tools) { tools = document.createElement("div"); tools.className = "pv-tools"; box.prepend(tools); }
+    tools.append(big);
   });
   hooks.infoExtra.forEach((f) => f(el, [e]));
   return true;

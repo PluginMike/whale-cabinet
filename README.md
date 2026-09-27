@@ -93,6 +93,10 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
 - Click the empty part of the path bar (or Ctrl+L) to type a path; `~` and `file://` work.
 - Start typing to filter the current view. Hidden files: Ctrl+H (also honours `.hidden` files).
 - Drag from a row's empty space (not its name) to rubber-band select.
+- Settings → Item size scales files and folders (Ctrl+scroll zooms one view); Settings → "Double-clicking a folder"
+  chooses between opening it (Windows style, default) and pulling it out inline (cabinet style).
+- Drag the info panel's left edge to resize it (double-click the edge to reset); "⤢ Open large" pops a preview
+  out full size.
 - The view refreshes itself when files change on disk.
 - Drag items onto a folder, a Places drawer or another pane to move them (hold Ctrl to copy); drag past the
   window edge to hand them to another app. Files dropped in from other apps land where you drop them.

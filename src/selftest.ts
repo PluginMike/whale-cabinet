@@ -185,11 +185,24 @@ suites.ops = async (base) => {
   un();
 };
 
+// "repl" suite: run JS dropped into $WC_SELFTEST/cmd.js (dev only), log the result.
+suites.repl = async () => {
+  (window as any).app = app;
+  for (;;) {
+    const js = await invoke<string | null>("selftest_cmd");
+    if (js) {
+      try { const r = await (0, eval)(`(async () => { ${js} })()`); log(`REPL ${JSON.stringify(r ?? null)?.slice(0, 2000)}`); }
+      catch (e) { log(`REPL-ERR ${e}`); }
+    }
+    await sleep(150);
+  }
+};
+
 (async () => {
   const base: string = await invoke("selftest_dir");
   const which = (await invoke<string>("selftest_suites")).split(",").filter(Boolean);
   await sleep(600);
-  for (const s of which.length ? which : Object.keys(suites)) {
+  for (const s of which.length ? which : Object.keys(suites).filter((x) => x !== "repl")) {
     log(`suite ${s}`);
     try { await suites[s](base); } catch (e) { check(`${s} crashed`, false, String(e)); }
   }
