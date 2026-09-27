@@ -243,6 +243,138 @@ pub async fn trash_purge(ids: Option<Vec<String>>) -> R<()> {
     tauri::async_runtime::spawn_blocking(move || ops::trash_purge(ids.as_deref())).await.map_err(|e| e.to_string())?
 }
 
+// ---------- archives (external tools, cancellable) ----------
+
+const ARCHIVE_EXTS: [&str; 12] = [".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2", ".tgz", ".txz", ".tar", ".zip", ".7z", ".rar", ".gz", ".xz"];
+
+/// "photos.tar.gz" → "photos"
+pub fn archive_stem(name: &str) -> String {
+    let lower = name.to_lowercase();
+    ARCHIVE_EXTS.iter().find(|e| lower.ends_with(*e) && lower.len() > e.len()).map(|e| name[..name.len() - e.len()].to_owned()).unwrap_or_else(|| name.to_owned())
+}
+
+/// Run a tool until it exits or the job is cancelled; on failure/cancel remove `output` so nothing half-made stays.
+fn run_tool(rep: &Rep, argv: &[String], cwd: &Path, output: &Path, out: &mut ops::Outcome) -> bool {
+    let child = Command::new(&argv[0]).args(&argv[1..]).current_dir(cwd).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => {
+            out.errors.push(format!("{}: {e}", argv[0]));
+            return false;
+        }
+    };
+    let cleanup = || {
+        let _ = if output.is_dir() { std::fs::remove_dir_all(output) } else { std::fs::remove_file(output) };
+    };
+    loop {
+        if rep.cancelled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            cleanup();
+            out.cancelled = true;
+            return false;
+        }
+        match child.try_wait() {
+            Ok(Some(st)) if st.success() => return true,
+            Ok(Some(st)) => {
+                let mut err = String::new();
+                let _ = std::io::Read::read_to_string(&mut child.stderr.take().unwrap(), &mut err);
+                out.errors.push(format!("{} failed ({st}): {}", argv[0], err.lines().rev().take(3).collect::<Vec<_>>().join(" / ")));
+                cleanup();
+                return false;
+            }
+            Ok(None) => {
+                rep.progress(0, 0, output);
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                out.errors.push(e.to_string());
+                return false;
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn op_compress(app: AppHandle, items: Vec<String>, format: String) -> R<u64> {
+    let first = PathBuf::from(items.first().ok_or("nothing selected")?);
+    let dir = first.parent().unwrap_or(Path::new("/")).to_path_buf();
+    let base = if items.len() == 1 {
+        let n = first.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        if first.is_dir() { n } else { archive_stem(&n).rsplit_once('.').map(|(a, _)| a.to_owned()).filter(|a| !a.is_empty()).unwrap_or(n) }
+    } else {
+        "Archive".into()
+    };
+    let want = dir.join(format!("{base}.{format}"));
+    let out_path = if want.exists() { ops::unique(&want, false) } else { want };
+    let names: Vec<String> = items.iter().filter_map(|p| Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned())).collect();
+    let o = out_path.to_string_lossy().into_owned();
+    let argv: Vec<String> = match format.as_str() {
+        "zip" => ["zip", "-r", "-y", "-q", &o, "--"].iter().map(|s| s.to_string()).chain(names).collect(),
+        "7z" => ["7z", "a", "-y", &o, "--"].iter().map(|s| s.to_string()).chain(names).collect(),
+        f if f.starts_with("tar") => ["tar", "-caf", &o, "--"].iter().map(|s| s.to_string()).chain(names).collect(),
+        f => return Err(format!("unknown format {f}")),
+    };
+    let title = format!("Compressing to {}", out_path.file_name().unwrap_or_default().to_string_lossy());
+    Ok(spawn(&app, title, false, move |rep| {
+        let mut out = ops::Outcome::default();
+        let ok = run_tool(rep, &argv, &dir, &out_path, &mut out);
+        let undo = ok.then(|| Undo::Trash { paths: vec![out_path.to_string_lossy().into_owned()] });
+        if ok {
+            out.done.push((String::new(), out_path.to_string_lossy().into_owned()));
+        }
+        (out, undo)
+    }))
+}
+
+/// Extract each archive into a new folder named after it, next to it.
+#[tauri::command]
+pub fn op_extract(app: AppHandle, items: Vec<String>) -> u64 {
+    spawn(&app, format!("Extracting {}", count(items.len(), "archive")), false, move |rep| {
+        let mut out = ops::Outcome::default();
+        let mut made = vec![];
+        for a in &items {
+            let a = PathBuf::from(a);
+            let dir = a.parent().unwrap_or(Path::new("/")).to_path_buf();
+            let want = dir.join(archive_stem(&a.file_name().unwrap_or_default().to_string_lossy()));
+            let dest = if want.exists() { ops::unique(&want, false) } else { want };
+            if let Err(e) = std::fs::create_dir(&dest) {
+                out.errors.push(format!("{}: {e}", dest.display()));
+                continue;
+            }
+            // bsdtar reads zip/7z/rar/tar.*, refusing absolute and ../ paths by default
+            let ok = run_tool(rep, &["bsdtar".into(), "-xf".into(), a.to_string_lossy().into_owned(), "-C".into(), dest.to_string_lossy().into_owned()], &dir, &dest, &mut out)
+                || (crate::desktop::which("7z").is_some() && !out.cancelled && {
+                    out.errors.pop();
+                    let _ = std::fs::create_dir(&dest);
+                    run_tool(rep, &["7z".into(), "x".into(), "-y".into(), format!("-o{}", dest.display()), a.to_string_lossy().into_owned()], &dir, &dest, &mut out)
+                });
+            if ok {
+                made.push(dest.to_string_lossy().into_owned());
+            }
+            if out.cancelled {
+                break;
+            }
+        }
+        out.done = made.iter().map(|m| (String::new(), m.clone())).collect();
+        (out, Some(Undo::Trash { paths: made }))
+    })
+}
+
+/// Which archive tools exist (so the menu only offers what works).
+#[tauri::command]
+pub fn archive_tools() -> HashMap<&'static str, bool> {
+    ["zip", "tar", "7z", "bsdtar"].into_iter().map(|t| (t, crate::desktop::which(t).is_some())).collect()
+}
+
+/// Put plain text (e.g. a path) on the clipboard.
+#[tauri::command]
+pub fn copy_text(text: String) -> R<()> {
+    let mut cmd = if wayland() { Command::new("wl-copy") } else { let mut c = Command::new("xclip"); c.args(["-selection", "clipboard"]); c };
+    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+    child.stdin.take().unwrap().write_all(text.as_bytes()).map_err(|e| e.to_string())
+}
+
 // ---------- clipboard (text/uri-list, interoperable with Dolphin/Nautilus) ----------
 
 pub fn to_uri(p: &str) -> String {
@@ -332,6 +464,14 @@ pub async fn clip_get(app: AppHandle) -> R<ClipContent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn archive_stems() {
+        assert_eq!(archive_stem("photos.tar.gz"), "photos");
+        assert_eq!(archive_stem("a.b.ZIP"), "a.b");
+        assert_eq!(archive_stem(".zip"), ".zip");
+        assert_eq!(archive_stem("notes.txt"), "notes.txt");
+    }
+
     #[test]
     fn uri_roundtrip() {
         for p in ["/home/a b/ünï💾.txt", "/x/100%/#hash?.md", "/new\nline"] {

@@ -1,9 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod desktop;
 mod jobs;
 mod listing;
 mod ops;
 mod preview;
+mod props;
 mod settings;
 mod tags;
 mod theme;
@@ -333,6 +335,121 @@ async fn dir_stats(path: String) -> R<preview::DirStats> {
     blocking(move || preview::dir_stats(Path::new(&path))).await
 }
 
+// ---------- open with / apps / terminal ----------
+
+fn term_pref(app: &AppHandle) -> String {
+    app.state::<Settings>().0.lock().unwrap().get("terminal").and_then(Value::as_str).unwrap_or("").to_owned()
+}
+fn icon_theme() -> String {
+    theme::icon_theme()
+}
+fn choice(a: &desktop::App, default: bool, theme: &str) -> desktop::AppChoice {
+    desktop::AppChoice { id: a.id.clone(), name: a.name.clone(), icon: desktop::find_icon(&a.icon, theme).map(|p| p.to_string_lossy().into_owned()), default }
+}
+
+/// Apps registered for this file's type, default first.
+#[tauri::command]
+async fn apps_for(path: String) -> R<(String, Vec<desktop::AppChoice>)> {
+    blocking(move || {
+        let mime = desktop::mime_of(Path::new(&path));
+        let apps = desktop::all_apps();
+        let ids = desktop::apps_for_mime(&mime, &apps, &desktop::load_mimeapps());
+        let theme = icon_theme();
+        let list = ids.iter().enumerate().filter_map(|(i, id)| apps.get(id).map(|a| choice(a, i == 0, &theme))).collect();
+        (mime, list)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn all_apps() -> R<Vec<desktop::AppChoice>> {
+    blocking(|| {
+        let theme = icon_theme();
+        let mut v: Vec<_> = desktop::all_apps().values().filter(|a| !a.no_display).map(|a| choice(a, false, &theme)).collect();
+        v.sort_by_key(|a| a.name.to_lowercase());
+        v
+    })
+    .await
+}
+
+#[tauri::command]
+async fn launch_app(id: String, paths: Vec<String>, app: AppHandle) -> R<()> {
+    let term = term_pref(&app);
+    blocking(move || {
+        let apps = desktop::all_apps();
+        let a = apps.get(&id).ok_or(format!("{id} not found"))?;
+        desktop::launch(a, &paths, &term)
+    })
+    .await?
+}
+
+/// Open files with their default apps (grouped per app), falling back to xdg-open.
+#[tauri::command]
+async fn open_default(paths: Vec<String>, app: AppHandle) -> R<()> {
+    let term = term_pref(&app);
+    blocking(move || {
+        let apps = desktop::all_apps();
+        let ma = desktop::load_mimeapps();
+        let mut groups: Vec<(String, Vec<String>)> = vec![];
+        for p in paths {
+            let mime = desktop::mime_of(Path::new(&p));
+            match desktop::apps_for_mime(&mime, &apps, &ma).into_iter().next() {
+                Some(id) => match groups.iter_mut().find(|g| g.0 == id) {
+                    Some(g) => g.1.push(p),
+                    None => groups.push((id, vec![p])),
+                },
+                None => desktop::spawn_detached(&["xdg-open".into(), p.clone()], Path::new("/"))?,
+            }
+        }
+        for (id, files) in groups {
+            desktop::launch(&apps[&id], &files, &term)?;
+        }
+        Ok(())
+    })
+    .await?
+}
+
+#[tauri::command]
+fn set_default_app(mime: String, id: String) -> R<()> {
+    desktop::set_default(&mime, &id)
+}
+
+#[tauri::command]
+async fn mime_icon(path: String) -> R<Option<String>> {
+    blocking(move || {
+        let mime = desktop::mime_of(Path::new(&path));
+        let (own, generic) = desktop::mime_icon_name(&mime);
+        let theme = icon_theme();
+        desktop::find_icon(&own, &theme).or_else(|| desktop::find_icon(&generic, &theme)).map(|p| p.to_string_lossy().into_owned())
+    })
+    .await
+}
+
+#[tauri::command]
+fn open_terminal(dir: String, app: AppHandle) -> R<()> {
+    let t = desktop::terminal(&term_pref(&app)).ok_or("no terminal emulator found (set one in Settings)")?;
+    desktop::spawn_detached(&desktop::terminal_argv(&t, &dir, &[]), Path::new(&dir))
+}
+
+// ---------- properties ----------
+
+#[tauri::command]
+async fn file_props(path: String) -> R<props::Props> {
+    blocking(move || props::props(Path::new(&path))).await?
+}
+#[tauri::command]
+async fn set_mode(path: String, mode: u32, recursive: bool) -> R<Vec<String>> {
+    blocking(move || props::set_mode(Path::new(&path), mode, recursive)).await
+}
+#[tauri::command]
+async fn file_details(path: String) -> R<std::collections::BTreeMap<String, String>> {
+    blocking(move || props::details(Path::new(&path))).await
+}
+#[tauri::command]
+async fn checksum(path: String, algo: String) -> R<String> {
+    blocking(move || props::checksum(Path::new(&path), &algo)).await?
+}
+
 /// PNG used as the cursor image when dragging files out to other apps.
 #[tauri::command]
 fn drag_icon() -> String {
@@ -370,6 +487,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_path, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
+            apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
+            jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,
             jobs::op_transfer, jobs::op_delete, jobs::op_trash, jobs::op_undo, jobs::op_cancel, jobs::op_resolve,
             jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
             jobs::clip_set, jobs::clip_get

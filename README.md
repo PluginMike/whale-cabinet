@@ -48,6 +48,20 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
   "View source" toggles). Markdown is sanitized before it's shown.
 - Folders show their item count; "Calculate total size" walks the whole tree on demand.
 
+### Right-click menu, Open With, Properties
+
+- The context menu has Open, **Open With** (apps registered for the file type from `.desktop` files and
+  `mimeapps.list`, default first, with icons from your icon theme) and **Other Application…** (searchable,
+  with "Always use this", which writes `~/.config/mimeapps.list`), Open in New Tab, Open Terminal Here
+  (Settings → Terminal, else `$TERMINAL`, else kitty/foot/ghostty/alacritty/…), cut/copy/paste/rename/duplicate,
+  Copy Path, Compress (zip, tar.gz/xz/zst, 7z — whatever is installed) and Extract Here (bsdtar, 7z fallback),
+  Colour and Tags submenus, Trash/Delete and Properties.
+- Double-click / Enter opens files with their default app from `mimeapps.list` (xdg-open as fallback).
+- Properties (its own `whale-cabinet-dialog` window): General (editable name, type, location, size/contents,
+  created/modified/accessed, link target), Permissions (owner/group, read/write/execute; optional recursive apply —
+  files never gain an execute bit they didn't have), Details (image size, EXIF, audio/video tags and streams via
+  `ffprobe`), Checksums (MD5 / SHA-256 on demand, compare with a pasted value).
+
 ### Tags, colours, ratings (shared with Dolphin)
 
 - Tags live in the `user.xdg.tags` extended attribute (comma-separated), ratings in `user.baloo.rating`
@@ -95,6 +109,9 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 | Del / Shift+Del | Move to Trash / Delete permanently (asks first) |
 | Ctrl+R (in Trash) | Restore |
 | Ctrl+Z | Undo last operation |
+| Menu key, Shift+F10 | Context menu |
+| Alt+Enter | Properties |
+| Shift+F4 | Open terminal here |
 | Space | Quick Look (←/→ flip through files, Esc closes) |
 | F11 | Show/hide the info panel |
 

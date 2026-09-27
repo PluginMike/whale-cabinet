@@ -394,7 +394,7 @@ export class Pane {
         else if (this.rows[fi].depth > 0) this.moveFocus(this.index.get(this.rows[fi].parent)!, ev);
         return stop();
       case "Enter": {
-        if (fi < 0 && !this.sel.size) return false;
+        if (ev.altKey || (fi < 0 && !this.sel.size)) return false;
         const picked = this.sel.size ? this.selected() : [this.rows[fi].e];
         const dir = picked.find((e) => e.dir);
         if (dir) this.host.open(dir, this); else picked.forEach((e) => this.host.open(e, this));

@@ -1,8 +1,12 @@
 {
   "identifier": "default",
-  "windows": ["main", "dlg-*"],
+  "windows": [
+    "main",
+    "dlg-*"
+  ],
   "permissions": [
     "core:default",
+    "core:window:allow-set-title",
     "core:window:allow-start-dragging",
     "core:window:allow-close",
     "core:window:allow-minimize",
