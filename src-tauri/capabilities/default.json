@@ -1,5 +1,12 @@
 {
   "identifier": "default",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "windows": ["main", "dlg-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-set-focus"
+  ]
 }

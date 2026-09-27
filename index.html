@@ -7,7 +7,11 @@
   <script type="module" src="/src/main.ts"></script>
 </head>
 <body>
-  <div id="app">
+  <div id="app" hidden>
+    <div id="titlebar" data-tauri-drag-region hidden>
+      <span data-tauri-drag-region>Whale Cabinet</span>
+      <button id="tb-min" title="Minimize">–</button><button id="tb-max" title="Maximize">□</button><button id="tb-close" title="Close">✕</button>
+    </div>
     <header id="topbar">
       <button id="back" title="Back (Alt+Left)">‹</button>
       <button id="fwd" title="Forward (Alt+Right)">›</button>
@@ -16,24 +20,33 @@
       <nav id="crumbs" title="Click empty space or Ctrl+L to edit"></nav>
       <input id="pathedit" spellcheck="false" hidden />
       <input id="filter" placeholder="Filter…" spellcheck="false" />
+      <select id="viewmode" title="View mode (Ctrl+1/2/3)">
+        <option value="cabinet">Cabinet</option><option value="compact">Compact</option><option value="grid">Icons</option>
+      </select>
       <select id="sort" title="Sort">
-        <option value="name">Name</option>
-        <option value="size">Size</option>
-        <option value="mtime">Date</option>
-        <option value="type">Type</option>
+        <option value="name">Name</option><option value="size">Size</option><option value="mtime">Date</option><option value="type">Type</option>
       </select>
       <button id="sortdir" title="Reverse sort">↓</button>
       <button id="hidden" title="Show hidden (Ctrl+H)">.*</button>
+      <button id="splitbtn" title="Split view (F3)">◫</button>
+      <button id="menubtn" title="Settings">☰</button>
     </header>
-    <aside id="sidebar"><div class="section">Places</div><div id="places"></div></aside>
-    <main id="pane" tabindex="0">
-      <div id="spacer"></div>
-      <div id="rows"></div>
-      <div id="band" hidden></div>
-      <div id="empty" hidden>Empty drawer</div>
-    </main>
+    <aside id="sidebar">
+      <div class="section">Places</div><div id="places"></div>
+      <div class="section" id="dev-head" hidden>Devices</div><div id="devices"></div>
+      <div class="section" id="tag-head" hidden>Tags</div><div id="tags"></div>
+    </aside>
+    <div id="center">
+      <div id="tabbar" hidden></div>
+      <div id="views"></div>
+      <div id="termpanel" hidden></div>
+    </div>
     <aside id="info"></aside>
-    <footer id="status"><span id="st-count"></span><span id="st-sel"></span><span id="st-free"></span></footer>
+    <footer id="status"><span id="st-count"></span><span id="st-sel"></span><span id="st-zoom"></span><span id="st-free"></span></footer>
   </div>
+  <div id="menu" hidden></div>
+  <div id="progress" hidden></div>
+  <div id="quicklook" hidden></div>
+  <div id="dialog" hidden></div>
 </body>
 </html>
