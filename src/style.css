@@ -1,0 +1,153 @@
+/* Whale Cabinet — flat filing-cabinet look. Every colour/shape is a role variable so Milestone 2
+   can swap them live from DMS/Hyprland. Rule: no gradients, no shadows. */
+:root {
+  /* built-in cabinet palette (fallback when DMS is absent) */
+  --interior: #e8e2d4;      /* drawer interior = main pane */
+  --body: #4f5d70;          /* cabinet body = sidebar */
+  --front: #6c7c92;         /* drawer fronts */
+  --holder: #f3eee2;        /* label holders on drawer fronts */
+  --on-holder: #2d2a26;
+  --accent: #d8772e;        /* selection, active drawer, focus */
+  --on-accent: #1f150c;
+  --tab: #e3b14f;           /* default folder tab */
+  --folder: #d9cfb8;        /* folder body */
+  --paper: #fbf8f0;
+  --on-paper: #2b2926;
+  --divider: #b9b09c;
+  --danger: #c2453a;
+  --text: #2b2926;
+  --muted: #6f6a60;
+  --bar: #dcd5c4;           /* top bar / status bar */
+  --panel: #efe9dc;         /* info panel */
+  --on-body: #eef1f5;
+  /* extension edges */
+  --k-img: #5f9e8f; --k-vid: #8b6fb3; --k-aud: #c9677a; --k-arc: #b8873a;
+  --k-code: #4f7fbf; --k-doc: #7a8f3d; --k-other: #9a9486;
+
+  --radius: 8px;
+  --gap: 8px;
+  --row: 36px;
+  --font: system-ui, "Adwaita Sans", "Cantarell", sans-serif;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--interior); }
+button, input, select { font: inherit; color: inherit; }
+
+#app {
+  height: 100vh;
+  display: grid;
+  grid-template: "top top top" auto "side main info" 1fr "stat stat stat" auto / 196px 1fr 260px;
+}
+
+/* ---------- top bar ---------- */
+#topbar {
+  grid-area: top; display: flex; gap: 6px; align-items: center;
+  padding: 6px var(--gap); background: var(--bar); border-bottom: 1px solid var(--divider);
+}
+#topbar button, #topbar select {
+  height: 28px; min-width: 28px; border: 1px solid var(--divider); border-radius: calc(var(--radius) * .6);
+  background: var(--paper); cursor: pointer; padding: 0 8px;
+}
+#topbar button:disabled { opacity: .4; cursor: default; }
+#topbar button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+#crumbs, #pathedit {
+  flex: 1; height: 28px; min-width: 0; border-radius: calc(var(--radius) * .6);
+  border: 1px solid var(--divider); background: var(--paper);
+}
+#crumbs { display: flex; align-items: center; overflow: hidden; padding: 0 4px; cursor: text; }
+#crumbs button { flex: none; border: 0 !important; background: transparent !important; height: 22px !important; padding: 0 4px !important; white-space: nowrap; }
+#crumbs button:hover { color: var(--accent); }
+#crumbs .sep { flex: none; color: var(--muted); padding: 0 1px; }
+#pathedit { padding: 0 8px; outline: 2px solid var(--accent); }
+#filter { width: 160px; height: 28px; border: 1px solid var(--divider); border-radius: calc(var(--radius) * .6); background: var(--paper); padding: 0 8px; }
+#filter:not(:placeholder-shown) { outline: 2px solid var(--accent); }
+
+/* ---------- sidebar: the cabinet ---------- */
+#sidebar { grid-area: side; background: var(--body); padding: var(--gap); overflow-y: auto; color: var(--on-body); }
+.section { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin: 4px 4px 8px; }
+.drawer {
+  position: relative; height: 48px; margin-bottom: 6px; border-radius: calc(var(--radius) * .6);
+  background: var(--front); cursor: pointer; transition: transform .18s ease-out, background .18s;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+}
+.drawer .label {
+  background: var(--holder); color: var(--on-holder); border: 2px solid var(--divider);
+  border-radius: 3px; font-size: 11.5px; padding: 1px 10px; max-width: 80%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.drawer .handle { width: 44px; height: 6px; border-radius: 3px; background: var(--body); }
+.drawer:hover { transform: translateX(3px); }
+.drawer.active { transform: translateX(12px); }
+.drawer.active .label { border-color: var(--accent); }
+.drawer.active .handle { background: var(--accent); }
+
+/* ---------- main pane: drawer interior ---------- */
+#pane { container-type: inline-size; grid-area: main; position: relative; overflow-y: auto; outline: none; padding: 0; user-select: none; }
+#spacer { width: 1px; }
+#rows { position: absolute; top: var(--gap); left: 0; right: 0; }
+#empty { position: absolute; inset: 40% 0 auto; text-align: center; color: var(--muted); pointer-events: none; }
+#band { position: absolute; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); pointer-events: none; }
+
+.row { position: absolute; left: 0; right: 0; height: var(--row); padding: 0 calc(var(--gap) * 2) 0 calc(var(--gap) * 2 + var(--depth, 0) * 22px); }
+.row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; cursor: default; }
+.row .meta { color: var(--muted); font-size: 12px; white-space: nowrap; margin-left: auto; font-variant-numeric: tabular-nums; }
+.row .meta + .meta { margin-left: 18px; }
+.row .size { width: 72px; text-align: right; }
+.row .date { width: 128px; text-align: right; }
+@container (max-width: 560px) { .row .date { display: none; } }
+
+/* hanging file folder: staggered tab above a body */
+.folder .tab {
+  position: absolute; top: 2px; height: 10px; width: 92px; left: calc(var(--gap) * 2 + var(--depth, 0) * 22px + var(--stagger));
+  background: var(--tab); border-radius: calc(var(--radius) * .5) calc(var(--radius) * .5) 0 0;
+}
+.folder .body {
+  position: absolute; top: 11px; bottom: 0; left: calc(var(--gap) * 2 + var(--depth, 0) * 22px); right: calc(var(--gap) * 2);
+  background: var(--folder); border-top: 3px solid var(--tab);
+  border-radius: 0 calc(var(--radius) * .5) calc(var(--radius) * .5) calc(var(--radius) * .5);
+  display: flex; align-items: center; gap: 6px; padding: 0 10px 0 4px; color: var(--on-paper);
+}
+.chev { width: 18px; text-align: center; transition: transform .15s; color: var(--muted); cursor: pointer; flex: none; }
+.open .chev { transform: rotate(90deg); color: var(--accent); }
+.folder.open .body { background: color-mix(in srgb, var(--folder) 75%, var(--tab)); }
+
+/* paper strip */
+.file .paper {
+  position: absolute; top: 5px; bottom: 3px; left: calc(var(--gap) * 2 + var(--depth, 0) * 22px + 12px); right: calc(var(--gap) * 2);
+  background: var(--paper); color: var(--on-paper); border-left: 5px solid var(--edge, var(--k-other));
+  border-radius: calc(var(--radius) * .35); display: flex; align-items: center; gap: 8px; padding: 0 10px 0 6px;
+}
+.badge {
+  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .04em; min-width: 34px; text-align: center;
+  padding: 1px 4px; border-radius: 3px; background: var(--edge, var(--k-other)); color: var(--paper);
+  text-transform: uppercase; overflow: hidden;
+}
+.link .name::after { content: " ↪"; color: var(--muted); }
+.broken .name { text-decoration: line-through; color: var(--danger); }
+.hiddenf { opacity: .62; }
+
+.sel .body, .sel .paper { outline: 2px solid var(--accent); outline-offset: -2px; background: color-mix(in srgb, var(--accent) 22%, var(--paper)); }
+.focus .body, .focus .paper { box-shadow: none; outline: 2px dashed var(--accent); outline-offset: -2px; }
+.sel.focus .body, .sel.focus .paper { outline-style: solid; }
+
+.pop { animation: pop .22s ease-out backwards; animation-delay: var(--d); }
+@keyframes pop { from { opacity: 0; translate: -14px -4px; } }
+
+/* ---------- info panel ---------- */
+#info { grid-area: info; background: var(--panel); border-left: 1px solid var(--divider); padding: calc(var(--gap) * 2); overflow-y: auto; }
+#info h2 { font-size: 15px; margin: 12px 0 10px; word-break: break-all; font-weight: 600; }
+#info dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 12px; }
+#info dt { color: var(--muted); }
+#info dd { margin: 0; word-break: break-all; }
+.glyph { height: 96px; display: grid; place-items: center; }
+.glyph .gf { width: 110px; height: 74px; background: var(--folder); border-top: 8px solid var(--tab); border-radius: 0 6px 6px 6px; position: relative; }
+.glyph .gf::before { content: ""; position: absolute; top: -20px; left: 8px; width: 44px; height: 12px; background: var(--tab); border-radius: 5px 5px 0 0; }
+.glyph .gp { width: 70px; height: 90px; background: var(--paper); border-left: 7px solid var(--edge, var(--k-other)); border-radius: 4px; display: grid; place-items: center; }
+
+/* ---------- status bar ---------- */
+#status { grid-area: stat; display: flex; gap: 18px; padding: 4px calc(var(--gap) * 1.5); background: var(--bar); border-top: 1px solid var(--divider); font-size: 12px; color: var(--muted); }
+#st-free { margin-left: auto; }

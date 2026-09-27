@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Whale Cabinet</title>
+  <link rel="stylesheet" href="/src/style.css" />
+  <script type="module" src="/src/main.ts"></script>
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <button id="back" title="Back (Alt+Left)">‹</button>
+      <button id="fwd" title="Forward (Alt+Right)">›</button>
+      <button id="up" title="Up (Alt+Up)">↑</button>
+      <button id="home" title="Home (Alt+Home)">⌂</button>
+      <nav id="crumbs" title="Click empty space or Ctrl+L to edit"></nav>
+      <input id="pathedit" spellcheck="false" hidden />
+      <input id="filter" placeholder="Filter…" spellcheck="false" />
+      <select id="sort" title="Sort">
+        <option value="name">Name</option>
+        <option value="size">Size</option>
+        <option value="mtime">Date</option>
+        <option value="type">Type</option>
+      </select>
+      <button id="sortdir" title="Reverse sort">↓</button>
+      <button id="hidden" title="Show hidden (Ctrl+H)">.*</button>
+    </header>
+    <aside id="sidebar"><div class="section">Places</div><div id="places"></div></aside>
+    <main id="pane" tabindex="0">
+      <div id="spacer"></div>
+      <div id="rows"></div>
+      <div id="band" hidden></div>
+      <div id="empty" hidden>Empty drawer</div>
+    </main>
+    <aside id="info"></aside>
+    <footer id="status"><span id="st-count"></span><span id="st-sel"></span><span id="st-free"></span></footer>
+  </div>
+</body>
+</html>
