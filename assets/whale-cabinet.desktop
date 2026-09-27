@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Whale Cabinet
+GenericName=File Manager
+Comment=Browse and organise files in a filing cabinet
+Exec=whale-cabinet %U
+Icon=whale-cabinet
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;Core;
+MimeType=inode/directory;
+Keywords=files;folders;file manager;explorer;browser;cabinet;dolphin;
+StartupNotify=true
+StartupWMClass=whale-cabinet
+Actions=new-tab;
+
+[Desktop Action new-tab]
+Name=Open a New Tab
+Exec=whale-cabinet

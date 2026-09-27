@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
+mod fm1;
 mod jobs;
 mod listing;
 mod mounts;
@@ -104,17 +105,18 @@ async fn disk_space(path: String) -> Option<(u64, u64)> {
     blocking(move || listing::disk_space(Path::new(&path))).await.ok().flatten()
 }
 
-/// Folder to open at startup: first CLI argument (path or file:// URI), else home.
+/// What to open at startup, from argv: `[--select FILE] [PATH|URI]...`. Empty = home.
 #[tauri::command]
-fn start_path() -> String {
-    let home = dirs::home_dir().unwrap_or_else(|| "/".into());
-    std::env::args()
-        .nth(1)
-        .and_then(|a| listing::resolve(&a, &std::env::current_dir().unwrap_or(home.clone())).ok())
-        .unwrap_or(home)
-        .to_string_lossy()
-        .into_owned()
+fn start_args() -> Vec<listing::Target> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    listing::parse_args(&args, &std::env::current_dir().unwrap_or_else(|_| "/".into()))
 }
+
+fn home_target() -> listing::Target {
+    listing::Target { loc: dirs::home_dir().unwrap_or_else(|| "/".into()).to_string_lossy().into_owned(), select: None }
+}
+
+struct Bus(#[allow(dead_code)] Mutex<Option<zbus::blocking::Connection>>);
 
 /// Dev-only: `WC_SELFTEST=<dir>` runs src/selftest.ts, which reports here.
 #[tauri::command]
@@ -562,6 +564,18 @@ fn drag_icon() -> String {
 
 fn main() {
     tauri::Builder::default()
+        // Must be first: a second `whale-cabinet …` hands its arguments to this process and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let mut targets = listing::parse_args(argv.get(1..).unwrap_or(&[]), Path::new(&cwd));
+            if targets.is_empty() {
+                targets.push(home_target());
+            }
+            let _ = app.emit("open", fm1::OpenRequest { targets, properties: vec![] });
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_drag::init())
         .manage(jobs::Jobs::default())
         .manage(jobs::Clip::default())
@@ -582,13 +596,22 @@ fn main() {
                 }
             });
             watch_theme_files(h.clone());
+            // "Show in folder" from other apps (org.freedesktop.FileManager1)
+            let bus = match fm1::serve(h.clone()) {
+                Ok(c) => Some(c),
+                Err(e) => {
+                    eprintln!("whale-cabinet: FileManager1 D-Bus service unavailable: {e}");
+                    None
+                }
+            };
+            app.manage(Bus(Mutex::new(bus)));
             watch_places(h.clone());
             watch_devices(h.clone());
             watch_hyprland(h);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_path, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

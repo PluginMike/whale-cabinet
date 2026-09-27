@@ -17,6 +17,7 @@ if (dialog) {
   await import("./search");
   await import("./term");
   await initTheme(app.applySettings);
-  await app.start([{ loc: await invoke<string>("start_path") }]);
+  const targets = await invoke<{ loc: string; select: string | null }[]>("start_args");
+  await app.start(targets.map((t) => ({ loc: t.loc, select: t.select ?? undefined })));
   if (import.meta.env.DEV && (await invoke<boolean>("selftest", {}))) import("./selftest");
 }

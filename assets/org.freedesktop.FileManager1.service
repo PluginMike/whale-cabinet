@@ -1,0 +1,4 @@
+# Starts Whale Cabinet when an app asks the session bus to "show in folder" and no file manager is running.
+[D-BUS Service]
+Name=org.freedesktop.FileManager1
+Exec=@BIN@

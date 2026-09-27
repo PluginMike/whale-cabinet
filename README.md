@@ -5,24 +5,85 @@ Window class / Wayland app id: `whale-cabinet`.
 
 
 
-## Build & run from source (Arch/CachyOS)
-
-Needs `webkit2gtk-4.1`, `base-devel`, `librsvg`, Node ≥ 20 and Rust (rustup).
+## Install
 
 ```sh
-npm install
-npm run tauri dev             # dev build with hot reload
-npm run tauri build           # release binary: src-tauri/target/release/whale-cabinet
-whale-cabinet ~/Downloads     # optional start folder (path or file:// URI)
+scripts/install.sh              # build + install to ~/.local/bin (Dolphin stays the default)
+scripts/install.sh --default    # …and take over from Dolphin: default for folders + "Show in folder" (D-Bus)
+scripts/uninstall.sh            # remove it and give folders back to the previous file manager (Dolphin)
 ```
 
+Everything is per-user; nothing needs root. `--default` runs
+`xdg-mime default whale-cabinet.desktop inode/directory` (remembering the previous handler for uninstall) and
+installs a `org.freedesktop.FileManager1` D-Bus activation file, so browsers' "Show in folder" starts Whale Cabinet
+with the file selected. While it runs, it also claims that D-Bus name from Dolphin.
+
+Only one instance runs: a second `whale-cabinet …` opens a new tab in the existing window.
+
+```sh
+whale-cabinet ~/Downloads                  # folders
+whale-cabinet file:///etc/hosts            # file:// URIs (a file opens its folder with it selected)
+whale-cabinet --select ~/Pictures/cat.jpg  # reveal an item
+```
+
+### Hyprland keybind
+
+```lua
+-- hyprland.lua / config/keybinds.lua (Lua config)
+hl.bind("SUPER + E", hl.dsp.exec_cmd("uwsm app -- whale-cabinet"))
+```
+```ini
+# hyprland.conf (classic config)
+bind = SUPER, E, exec, whale-cabinet
+```
+
+### AppImage
+
+`npm run tauri build -- --bundles appimage` → `src-tauri/target/release/bundle/appimage/Whale Cabinet_<version>_amd64.AppImage`
+(self-contained, ~100 MB because it carries WebKitGTK).
+
+## Build from source
+
+Needs Rust (via [rustup](https://rustup.rs)), Node ≥ 20, WebKitGTK 4.1 and the usual build tools.
+The optional tools light up extra features: poppler (PDF previews), ffmpegthumbnailer + ffmpeg (video thumbnails,
+media details), libarchive/zip/7-Zip (compress/extract), wl-clipboard (copy/paste with other apps), udisks2 (devices).
+
+**Arch / CachyOS / Manjaro**
+```sh
+sudo pacman -S --needed base-devel webkit2gtk-4.1 curl wget file openssl librsvg libappindicator-gtk3 nodejs npm rustup
+sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-clipboard udisks2   # optional
+```
+
+**Fedora**
+```sh
+sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel libxdo-devel nodejs npm
+sudo dnf group install c-development
+sudo dnf install poppler-utils ffmpegthumbnailer ffmpeg-free bsdtar zip p7zip wl-clipboard udisks2   # optional
+```
+
+**Debian / Ubuntu**
+```sh
+sudo apt install build-essential libwebkit2gtk-4.1-dev libssl-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev curl wget file nodejs npm
+sudo apt install poppler-utils ffmpegthumbnailer ffmpeg libarchive-tools zip 7zip wl-clipboard udisks2   # optional
+```
+
+Then:
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # if you don't have Rust
+npm install
+npm run tauri dev       # run from source with hot reload
+scripts/install.sh      # build a release and install it
+```
 fish users with a user-local rustup: `fish_add_path ~/.cargo/bin`.
 
 ## Tests
 
 ```sh
-(cd src-tauri && cargo test)  # Rust unit tests (listing, path resolution, disk space)
-scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drives the real UI, grim screenshots
+(cd src-tauri && cargo test)   # 50 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
+                               # dms-colors.json, hyprctl JSON), .desktop/mimeapps/globs, thumbnails, xbel, search, pty…
+(cd src-tauri && cargo test real_system -- --ignored --nocapture)   # Open With / icons against this machine
+scripts/smoke.sh               # launches the app: end-to-end UI run against a temp tree (10k files, odd names),
+                               # file ops, DMS re-theme timing, built-in fallback; grim screenshots
 ```
 
 ## Usage

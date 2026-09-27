@@ -315,6 +315,19 @@ export function applySettings(s: Settings) {
 
 export async function start(initial: { loc: string; select?: string }[]) {
   HOME = await invoke<string>("resolve_path", { input: "~", cwd: "/" });
+  const bare = !initial.length;
+  if (bare) initial = [{ loc: HOME }];
+  const started = performance.now();
+  // Second launches and "Show in folder" (D-Bus) arrive here: open each in a tab. If we were just started
+  // bare (e.g. by D-Bus activation), reuse that untouched home tab instead of stacking a second one.
+  listen<{ targets: { loc: string; select: string | null }[]; properties: string[] }>("open", ({ payload }) => {
+    payload.targets.forEach((t, i) => {
+      const fresh = bare && i === 0 && tabs.length === 1 && performance.now() - started < 3000 && pane().loc === HOME && !pane().back.length;
+      if (fresh) pane().navigate(t.loc, false, t.select ?? undefined);
+      else newTab(t.loc, true, t.select ?? undefined);
+    });
+    if (payload.properties.length) invoke("open_dialog", { kind: "props", arg: JSON.stringify({ paths: payload.properties }), title: "Properties", width: 500, height: 600 });
+  });
   listen<string[]>("fs-change", ({ payload }) => allPanes().forEach((p) => p.onFsChange(payload)));
   for (const t of initial) newTab(t.loc, true, t.select);
   $("app").hidden = false;
