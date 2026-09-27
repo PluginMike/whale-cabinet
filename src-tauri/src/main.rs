@@ -3,6 +3,7 @@
 mod jobs;
 mod listing;
 mod ops;
+mod preview;
 mod settings;
 mod theme;
 
@@ -265,6 +266,24 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
     Ok(label)
 }
 
+// ---------- previews ----------
+
+#[tauri::command]
+async fn thumbnail(path: String, size: u32) -> R<String> {
+    blocking(move || preview::thumbnail(&preview::cache_root(), Path::new(&path), size).map(|p| p.to_string_lossy().into_owned())).await?
+}
+
+#[tauri::command]
+async fn read_text(path: String, max: usize) -> R<preview::Text> {
+    blocking(move || preview::read_text(Path::new(&path), max)).await?
+}
+
+#[tauri::command]
+async fn dir_stats(path: String) -> R<preview::DirStats> {
+    // NOTE: not cancellable; a huge tree just finishes in the background.
+    blocking(move || preview::dir_stats(Path::new(&path))).await
+}
+
 /// PNG used as the cursor image when dragging files out to other apps.
 #[tauri::command]
 fn drag_icon() -> String {
@@ -291,7 +310,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             start_path, selftest, selftest_dir, selftest_suites, list_dir, resolve_path, disk_space, places, open_path, watch,
-            get_settings, set_settings, get_theme, open_dialog, drag_icon,
+            get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, read_text, dir_stats,
             jobs::op_transfer, jobs::op_delete, jobs::op_trash, jobs::op_undo, jobs::op_cancel, jobs::op_resolve,
             jobs::rename_item, jobs::make_item, jobs::unique_name, jobs::trash_list, jobs::trash_restore, jobs::trash_purge,
             jobs::clip_set, jobs::clip_get

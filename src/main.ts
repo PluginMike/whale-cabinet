@@ -10,6 +10,7 @@ if (dialog) {
 } else {
   const app = await import("./app");
   await import("./ops");
+  await import("./preview");
   await initTheme(app.applySettings);
   await app.start([{ loc: await invoke<string>("start_path") }]);
   if (import.meta.env.DEV && (await invoke<boolean>("selftest", {}))) import("./selftest");

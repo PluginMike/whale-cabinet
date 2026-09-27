@@ -38,6 +38,16 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 - Long operations show in a progress panel with Cancel; name clashes open a conflict window
   (Skip / Overwrite / Rename / apply to all).
 
+### Previews
+
+- Image, video and PDF thumbnails load lazily in the list and grid, using the shared freedesktop cache
+  (`~/.cache/thumbnails`, same as Dolphin/Nautilus). Missing ones are generated (videos need `ffmpegthumbnailer`,
+  PDFs `pdftoppm` from poppler).
+- The info panel (F11) previews the selection: images, video/audio players, the first page of PDFs,
+  syntax-highlighted text/code, and rendered Markdown (tables, task lists, code blocks, relative images and links;
+  "View source" toggles). Markdown is sanitized before it's shown.
+- Folders show their item count; "Calculate total size" walks the whole tree on demand.
+
 ### Data safety
 
 - Copies go to a hidden temp file and are renamed into place, so a cancelled or failed copy never leaves a
@@ -72,6 +82,8 @@ scripts/smoke.sh              # e2e: temp tree with 10k files + odd names, drive
 | Del / Shift+Del | Move to Trash / Delete permanently (asks first) |
 | Ctrl+R (in Trash) | Restore |
 | Ctrl+Z | Undo last operation |
+| Space | Quick Look (←/→ flip through files, Esc closes) |
+| F11 | Show/hide the info panel |
 
 ## Theming (DankMaterialShell + Hyprland)
 

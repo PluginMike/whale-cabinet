@@ -20,13 +20,15 @@ export const hooks: {
   virtual?: Record<string, (loc: string, p: Pane) => Promise<Entry[]>>;
   thumb?: (e: Entry) => string | undefined;
   info: ((el: HTMLElement, picked: Entry[], p: Pane) => boolean)[];
+  /** Extra sections appended to a single item's info panel (tags, rating…). */
+  infoExtra: ((el: HTMLElement, e: Entry) => void)[];
   tagDrop?: (tag: string, paths: string[]) => void;
   dropMenu?: (x: number, y: number, pick: (copy: boolean) => void) => void;
   locTitle?: Record<string, (loc: string) => string>;
   open?: (e: Entry, p: Pane) => void;
   onNavigate?: (p: Pane) => void;
   keys: ((ev: KeyboardEvent, p: Pane) => boolean)[];
-} = { keys: [], info: [], virtual: {}, locTitle: {} };
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {} };
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
