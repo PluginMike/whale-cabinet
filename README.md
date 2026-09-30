@@ -194,7 +194,7 @@ in any order (so a plugin can work on several at once). Unasked messages `{"even
 |---|---|---|
 | `init` (always first) | `settings`, `cache` (a folder for downloads), `home` | `{roots?: [dir…], sidebar?: [{title, loc}…]}` |
 | `badges` | `paths` | `{path: {text, title, state: ok\|sync\|warn\|error\|shared} \| null}` |
-| `action` | `id`, `paths` | `{message?}` (shown in the status bar) |
+| `action` | `id`, `paths` | `{message?, copy?}` (shown in the status bar / put on the clipboard) |
 | `list` | `loc` | `{title?, entries: [entry…]}` |
 | `thumb` | `path`, `size?` (`preview` = big) | `{file}` — an image file |
 | `fetch` | `path` | `{file}` — the item downloaded to a local file |
@@ -202,6 +202,15 @@ in any order (so a plugin can work on several at once). Unasked messages `{"even
 
 An entry is `{name, path, dir?, size?, mtime? (ms), score? (sort order, highest first), thumb? (true), count?
 (a folder's "12 photos"), where?, info?: [[label, value]…]}`; its `path` is a location of the plugin's scheme.
+
+#### Nextcloud (bundled)
+
+With the Nextcloud desktop client running, items in your synced folders (from `~/.config/Nextcloud/nextcloud.cfg`)
+get its sync state as a badge — **✓** synced (blue when shared), **↻** syncing, **!** a problem, **⊘** excluded —
+updated live as the client syncs (it's the client's local socket, the one Dolphin's overlays use).
+Right-click → Nextcloud: *Share…* (the client's share dialog), *Copy Public Link* (reuses the item's public link
+or creates one; needs an app password from Nextcloud → Settings → Security in Settings → Plugins, kept in your
+keyring), *Open in Browser* (the item in the web UI). Check: `python3 plugins/nextcloud/test_nextcloud.py`.
 
 ### Recent files
 

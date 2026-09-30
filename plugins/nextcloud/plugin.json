@@ -1,0 +1,15 @@
+{
+  "title": "Nextcloud",
+  "description": "Sync status badges and sharing for your Nextcloud folder, through the running Nextcloud desktop client.",
+  "exec": "nextcloud.py",
+  "badges": true,
+  "settings": [
+    { "key": "apppassword", "label": "App password (for Copy public link)", "secret": true,
+      "placeholder": "Nextcloud → Settings → Security → Create new app password" }
+  ],
+  "actions": [
+    { "id": "share", "label": "Share…", "roots": true },
+    { "id": "publiclink", "label": "Copy Public Link", "roots": true },
+    { "id": "browser", "label": "Open in Browser", "roots": true }
+  ]
+}

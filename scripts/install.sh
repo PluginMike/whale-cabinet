@@ -56,6 +56,13 @@ install -Dm644 src-tauri/icons/32x32.png "$ICONS/32x32/apps/whale-cabinet.png"
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$APPS" || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t "$ICONS" 2>/dev/null || true
 echo "installed $BIN_DIR/whale-cabinet"
+# bundled plugins (each still asks before it first runs); your own plugins in that folder are left alone
+PLUGINS="${XDG_DATA_HOME:-$HOME/.local/share}/whale-cabinet/plugins"
+for d in plugins/*/; do
+  n=$(basename "$d")
+  mkdir -p "$PLUGINS/$n" && cp -r "$d". "$PLUGINS/$n/"
+  echo "installed plugin $n → $PLUGINS/$n"
+done
 
 if [[ " $* " == *" --default "* ]]; then
   mkdir -p "$CFG"

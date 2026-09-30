@@ -126,7 +126,8 @@ const mimeOk = (globs: string[], mime: string) => !globs.length || globs.some((g
 function actionItem(p: Plugin, a: Action, paths: string[]): Item {
   return { label: a.label, act: async () => {
     try {
-      const r = await call<{ message?: string } | null>(p.name, "action", { id: a.id, paths }, 300);
+      const r = await call<{ message?: string; copy?: string } | null>(p.name, "action", { id: a.id, paths }, 300);
+      if (r?.copy) await invoke("copy_text", { text: r.copy });
       if (r?.message) flash(r.message);
     } catch (err) { flash(String(err)); }
   } };
