@@ -3,7 +3,7 @@
 // A new plugin asks for consent before it ever runs.
 import { listen } from "@tauri-apps/api/event";
 import { $, Entry, invoke, esc, ext, parentOf, fmtSize, fmtDate, shown } from "./util";
-import { hooks, pane, allPanes, flash, newTab, scheme, dl, host } from "./app";
+import { hooks, pane, allPanes, flash, newTab, scheme, dl, host, openSettings } from "./app";
 import { Pane } from "./pane";
 import { Item } from "./menu";
 import { startDrag, confirmBox } from "./ops";
@@ -302,6 +302,9 @@ export async function loadPlugins(only?: string) {
   allPanes().filter((x) => (!only || owner(x.loc)?.p.name === only) && owner(x.loc)).forEach((x) => x.reload());
 }
 listen<string>("plugins-changed", ({ payload }) => loadPlugins(payload));
+// Tools → Plugins…: the Plugins tab of Settings
+$("tools").insertAdjacentHTML("beforeend", `<div class="recrow tool" id="tool-plugins"><i class="tool-ico"></i><span>Plugins…</span></div>`);
+$("tool-plugins").addEventListener("click", () => openSettings("plugins"));
 
 const prevNav = hooks.onNavigate;
 hooks.onNavigate = (p: Pane) => { prevNav?.(p); document.querySelectorAll<HTMLElement>(".plugin-sec .drawer").forEach((d) => d.classList.toggle("active", d.dataset.p === p.loc)); };

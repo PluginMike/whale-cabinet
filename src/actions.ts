@@ -70,6 +70,7 @@ export const actions: Action[] = [
   { label: "Open current folder in a new tab", run: () => newTab(pane().loc) },
   { label: "Copy location", run: () => invoke("copy_text", { text: pane().targetDir() || pane().loc }) },
   { label: "Settings", run: () => openSettings() },
+  { label: "Plugins", run: () => openSettings("plugins") },
 ];
 
 /** Letters of `q` in order in `label` (fuzzy); lower score = better: earlier and tighter matches. */

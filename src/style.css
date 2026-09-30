@@ -590,8 +590,18 @@ body.dragging #shelf.empty { display: block; }
 .pb-ok { background: var(--t-green); } .pb-sync { background: var(--accent); } .pb-warn { background: var(--t-orange); }
 .pb-error { background: var(--t-red); } .pb-shared { background: var(--t-blue); }
 .pal-img { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
-.plugin-set { padding: 6px 0; border-top: 1px solid var(--divider); }
-.plugin-set:first-of-type { border-top: 0; }
+.tabs { display: flex; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--divider); }
+.tabs button { border: 0; background: none; color: var(--muted); padding: 6px 14px; cursor: pointer; font: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button.on { color: var(--on-body); border-bottom-color: var(--accent); }
+.plugin-set { border: 1px solid var(--divider); border-radius: calc(var(--radius) * .6); padding: 8px 12px; margin: 8px 0; }
+.plugin-set summary { cursor: pointer; display: flex; align-items: center; gap: 10px; }
+.plugin-set summary b { flex: 1; }
+.pl-state { font-size: .82em; color: var(--muted); }
+.pl-state.on { color: var(--t-green); }
+.pl-readme { margin-top: 10px; border-top: 1px solid var(--divider); padding-top: 6px; font-size: .92em; line-height: 1.5; }
+.pl-readme h1 { font-size: 1.2em; } .pl-readme h2 { font-size: 1.05em; }
+.pl-readme code { background: var(--paper); color: var(--on-paper); padding: 0 4px; border-radius: 3px; }
+.pl-readme pre code { display: block; padding: 8px 10px; overflow: auto; }
 .toast.plugin-ask { max-width: min(760px, 92vw); }
 
 /* viewer: toolbar, PDF pages, zoom, copy buttons */

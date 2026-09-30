@@ -379,6 +379,14 @@ pub async fn plugin_set(name: String, key: String, value: String, app: AppHandle
     .await?
 }
 
+/// The plugin's README.md ("" when it has none), and where plugins live.
+#[tauri::command]
+pub fn plugin_readme(name: String) -> Result<(String, String), String> {
+    manifest(&name)?;
+    let text = std::fs::read_to_string(dir().join(&name).join("README.md")).unwrap_or_default();
+    Ok((text, dir().join(&name).to_string_lossy().into_owned()))
+}
+
 /// Mime types for action filters.
 #[tauri::command]
 pub async fn mime_types(paths: Vec<String>) -> Result<Vec<String>, String> {

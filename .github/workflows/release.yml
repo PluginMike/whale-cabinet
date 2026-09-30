@@ -1,0 +1,50 @@
+name: Release
+# Push a tag like v1.2.0 (matching the version in tauri.conf.json): builds the AppImage and .deb on Ubuntu 22.04
+# (so they run on older glibc too) and publishes a GitHub release whose notes list the commits since the last tag.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2 file
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: npm ci
+      - name: Build
+        run: npm run tauri build -- --bundles appimage,deb
+      - name: Bundle plugins
+        run: tar -czf whale-cabinet-plugins-${GITHUB_REF_NAME}.tar.gz --exclude=__pycache__ --exclude='test_*' plugins
+      - name: Changelog
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "## What's new"
+            echo
+            git log --no-merges --pretty='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME"
+            echo
+            echo "**Install:** download the AppImage (\`chmod +x\` and run it) or the .deb. From source: \`scripts/install.sh\`."
+            echo "Plugins: unpack \`whale-cabinet-plugins-*.tar.gz\` into \`~/.local/share/whale-cabinet/\`."
+            if [ -n "$prev" ]; then echo; echo "Full diff: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${GITHUB_REF_NAME}"; fi
+          } > notes.md
+          cat notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+            whale-cabinet-plugins-*.tar.gz

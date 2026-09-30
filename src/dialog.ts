@@ -1,5 +1,7 @@
 // Small separate windows (class whale-cabinet-dialog): settings, properties, open-with, conflicts.
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { $, esc, invoke } from "./util";
 import { Settings } from "./theme";
 
@@ -28,10 +30,12 @@ export async function run(kind: string, arg: string) {
   await handlers[kind]?.(arg);
 }
 
-async function settingsDialog() {
+async function settingsDialog(arg: string) {
   const s = await invoke<Settings>("get_settings");
   const radio = (name: string, v: string, label: string) => `<label><input type="radio" name="${name}" value="${v}" ${s[name] === v ? "checked" : ""}> ${label}</label>`;
   const body = frame("Settings", `
+    <div class="tabs"><button data-tab="general">General</button><button data-tab="plugins">Plugins</button></div>
+    <div data-pane="general">
     <form id="sf">
       <fieldset><legend>Theme</legend>
         ${radio("theme", "dms", "Follow DMS")} ${radio("theme", "builtin", "Built-in cabinet")} ${radio("theme", "custom", "Custom")}
@@ -56,7 +60,13 @@ async function settingsDialog() {
         <label>Terminal <input name="terminal" placeholder="auto (kitty, foot, ghostty, alacritty…)" value="${esc(s.terminal ?? "")}"></label>
       </fieldset>
       <p class="hint">Opacity below 100% only shows when Hyprland blur is on. Hyprland rules for this window: <code>class:^(whale-cabinet)$</code>, dialogs: <code>class:^(whale-cabinet-dialog)$</code>.</p>
-    </form>`);
+    </form></div><div data-pane="plugins"></div>`);
+  const show = (tab: string) => {
+    body.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    body.querySelectorAll<HTMLElement>("[data-pane]").forEach((d) => (d.hidden = d.dataset.pane !== tab));
+  };
+  body.querySelector(".tabs")!.addEventListener("click", (e) => { const t = (e.target as HTMLElement).dataset.tab; if (t) show(t); });
+  show(arg === "plugins" ? "plugins" : "general");
   const form = body.querySelector<HTMLFormElement>("#sf")!;
   form.addEventListener("input", (e) => {
     const t = e.target as HTMLInputElement;
@@ -64,36 +74,51 @@ async function settingsDialog() {
     if (t.type === "range") t.nextElementSibling!.textContent = `${Math.round(+t.value * 100)}%`;
     invoke("set_settings", { patch: { [t.name]: v } });
   });
-  body.append(await pluginSettings());
+  body.querySelector("[data-pane=plugins]")!.append(await pluginSettings());
 }
 
-/** Settings → Plugins: allow or stop each one, and its own settings (secrets go to the keyring). */
+/** Settings → Plugins: each plugin with its switch, its own settings (secrets go to the keyring) and its README. */
 async function pluginSettings() {
   type P = { name: string; title: string; description: string; consent: boolean | null; settings: { key: string; label: string; secret: boolean; placeholder: string }[] };
   const list = await invoke<P[]>("plugins_list").catch(() => [] as P[]);
-  const box = document.createElement("fieldset");
-  box.innerHTML = `<legend>Plugins</legend>` + (list.length ? "" : `<p class="hint">None installed.</p>`) +
-    `<p class="hint">Plugins live in <code>~/.local/share/whale-cabinet/plugins/</code> and run as you. Changes restart the plugin.</p>`;
+  const box = document.createElement("div");
+  box.className = "plugins-pane";
+  box.innerHTML = `<p class="hint">Plugins live in <code>~/.local/share/whale-cabinet/plugins/</code>, one folder each, and run as you.
+    Each asks before its first run. Changing a setting restarts the plugin.</p>` + (list.length ? "" : `<p class="hint">None installed.</p>`);
   for (const p of list) {
     const vals = p.consent ? await invoke<Record<string, string | boolean>>("plugin_settings", { name: p.name }).catch(() => ({} as Record<string, string | boolean>)) : {};
-    const d = document.createElement("div");
+    const d = document.createElement("details");
     d.className = "plugin-set";
-    d.innerHTML = `<label><input type="checkbox" data-consent ${p.consent ? "checked" : ""}> <b>${esc(p.title)}</b></label>
+    d.innerHTML = `<summary><b>${esc(p.title)}</b><span class="pl-state ${p.consent ? "on" : ""}">${p.consent ? "On" : p.consent === false ? "Off" : "Not allowed yet"}</span></summary>
       ${p.description ? `<p class="hint">${esc(p.description)}</p>` : ""}
+      <label><input type="checkbox" data-consent ${p.consent ? "checked" : ""}> Allow ${esc(p.title)} to run</label>
       ${p.settings.map((s) => s.secret
         ? `<label>${esc(s.label)} <input type="password" data-key="${esc(s.key)}" autocomplete="off" placeholder="${vals[s.key] ? "saved in your keyring (type to replace)" : esc(s.placeholder || "not set")}"></label>`
-        : `<label>${esc(s.label)} <input data-key="${esc(s.key)}" spellcheck="false" placeholder="${esc(s.placeholder)}" value="${esc(String(vals[s.key] ?? ""))}"></label>`).join("")}`;
+        : `<label>${esc(s.label)} <input data-key="${esc(s.key)}" spellcheck="false" placeholder="${esc(s.placeholder)}" value="${esc(String(vals[s.key] ?? ""))}"></label>`).join("")}
+      <div class="pl-readme"></div>`;
     d.querySelectorAll<HTMLInputElement>("[data-key]").forEach((i) => (i.disabled = !p.consent));
+    d.addEventListener("toggle", async () => {
+      const r = d.querySelector<HTMLElement>(".pl-readme")!;
+      if (!d.open || r.dataset.done) return;
+      r.dataset.done = "1";
+      const [text] = await invoke<[string, string]>("plugin_readme", { name: p.name }).catch(() => ["", ""]);
+      if (!text) return;
+      r.innerHTML = DOMPurify.sanitize(marked.parse(text, { gfm: true, async: false }) as string);
+      r.querySelectorAll("a").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); const h = a.getAttribute("href") ?? ""; if (/^https?:/.test(h)) invoke("open_path", { path: h }); }));
+    });
     d.addEventListener("change", async (e) => {
       const t = e.target as HTMLInputElement;
       try {
-        if (t.dataset.consent !== undefined) { await invoke("plugin_consent", { name: p.name, allow: t.checked }); d.querySelectorAll<HTMLInputElement>("[data-key]").forEach((i) => (i.disabled = !t.checked)); }
-        else if (t.dataset.key) {
+        if (t.dataset.consent !== undefined) {
+          await invoke("plugin_consent", { name: p.name, allow: t.checked });
+          d.querySelectorAll<HTMLInputElement>("[data-key]").forEach((i) => (i.disabled = !t.checked));
+          const st = d.querySelector(".pl-state")!; st.textContent = t.checked ? "On" : "Off"; st.classList.toggle("on", t.checked);
+        } else if (t.dataset.key) {
           await invoke("plugin_set", { name: p.name, key: t.dataset.key, value: t.value.trim() });
           if (t.type === "password") { t.placeholder = t.value ? "saved in your keyring (type to replace)" : "not set"; t.value = ""; }
         }
         d.querySelector(".err")?.remove();
-      } catch (err) { d.querySelector(".err")?.remove(); d.insertAdjacentHTML("beforeend", `<p class="err">${esc(String(err))}</p>`); }
+      } catch (err) { d.querySelector(".err")?.remove(); d.querySelector(".pl-readme")!.insertAdjacentHTML("beforebegin", `<p class="err">${esc(String(err))}</p>`); }
     });
     box.append(d);
   }

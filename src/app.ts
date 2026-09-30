@@ -374,7 +374,7 @@ export function toggleHidden(v = !host.showHidden) {
   $("hidden").classList.toggle("on", v);
   for (const t of tabs) for (const p of t.panes) p.rebuild();
 }
-export const openSettings = () => invoke("open_dialog", { kind: "settings", arg: "", title: "Whale Cabinet Settings", width: 460, height: 560 });
+export const openSettings = (tab = "") => invoke("open_dialog", { kind: "settings", arg: tab, title: "Whale Cabinet Settings", width: 560, height: 640 });
 export const allPanes = () => tabs.flatMap((t) => t.panes);
 
 // ---------- sidebar: places ----------

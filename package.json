@@ -1,7 +1,7 @@
 {
   "name": "whale-cabinet",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,5 +21,6 @@
     "@tauri-apps/cli": "^2.12.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1"
-  }
+  },
+  "license": "GPL-3.0-or-later"
 }

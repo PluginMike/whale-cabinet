@@ -1,10 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect x="56" y="40" width="400" height="432" rx="40" fill="#3b4a5c"/>
-  <rect x="88" y="72" width="336" height="176" rx="20" fill="#9fb3c8"/>
-  <rect x="88" y="264" width="336" height="176" rx="20" fill="#9fb3c8"/>
-  <rect x="196" y="104" width="120" height="44" rx="8" fill="#f4efe4"/>
-  <rect x="196" y="296" width="120" height="44" rx="8" fill="#f4efe4"/>
-  <rect x="200" y="186" width="112" height="22" rx="11" fill="#3b4a5c"/>
-  <rect x="200" y="378" width="112" height="22" rx="11" fill="#3b4a5c"/>
-  <path d="M338 110c14-20 36-20 44-4-10-2-18 2-22 10 14 4 22 14 22 28-18-6-34-8-44-34z" fill="#3b4a5c"/>
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a8fc8"/><stop offset="1" stop-color="#0d3a5f"/>
+    </linearGradient>
+    <linearGradient id="hide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40627f"/><stop offset="1" stop-color="#27405a"/>
+    </linearGradient>
+    <clipPath id="tile"><rect width="512" height="512" rx="112"/></clipPath>
+    <clipPath id="body"><path id="bodyp" d="M78 306C78 220 160 170 258 170C352 170 410 222 420 286C426 326 406 362 368 382C328 402 286 410 236 410C140 410 78 372 78 306Z"/></clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="512" height="512" fill="url(#sea)"/>
+    <circle cx="96" cy="120" r="7" fill="#cfe6f5" opacity=".35"/><circle cx="130" cy="84" r="4" fill="#cfe6f5" opacity=".35"/><circle cx="420" cy="96" r="5" fill="#cfe6f5" opacity=".3"/>
+    <!-- tail -->
+    <path d="M384 318C420 300 440 262 444 214C426 196 410 176 408 146C432 156 452 172 462 190C476 172 496 164 512 166C502 186 486 204 468 216C466 272 440 320 400 348Z" fill="#2f4b67"/>
+    <!-- spout: three sheets of paper -->
+    <path d="M252 170c-4-20-2-38 6-52" stroke="#d8ecf8" stroke-width="10" stroke-linecap="round" fill="none"/>
+    <g transform="translate(262 96)">
+      <rect x="-30" y="-52" width="50" height="62" rx="6" fill="#e9e2d2" transform="rotate(-26)"/>
+      <rect x="-12" y="-66" width="50" height="62" rx="6" fill="#f4efe4" transform="rotate(22)"/>
+      <rect x="-25" y="-64" width="50" height="62" rx="6" fill="#fffaf0"/>
+      <path d="M-15 -50h30M-15 -38h30M-15 -26h20" stroke="#9fb3c8" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <!-- body = cabinet with three drawers -->
+    <use href="#bodyp" fill="url(#hide)"/>
+    <g clip-path="url(#body)">
+      <rect x="60" y="334" width="400" height="90" fill="#a8bccf"/>
+      <path d="M60 252H440M60 334H440" stroke="#162a3d" stroke-width="7"/>
+      <g fill="#f4efe4"><rect x="252" y="196" width="88" height="26" rx="5"/><rect x="252" y="270" width="88" height="26" rx="5"/><rect x="252" y="350" width="88" height="26" rx="5"/></g>
+      <g fill="#162a3d" opacity=".75"><rect x="276" y="230" width="40" height="10" rx="5"/><rect x="276" y="306" width="40" height="10" rx="5"/><rect x="276" y="386" width="40" height="10" rx="5"/></g>
+      <g fill="#9fb3c8"><rect x="266" y="205" width="60" height="6" rx="3"/><rect x="266" y="279" width="60" height="6" rx="3"/><rect x="266" y="359" width="60" height="6" rx="3"/></g>
+    </g>
+    <!-- face -->
+    <circle cx="146" cy="226" r="18" fill="#fffaf0"/>
+    <circle cx="150" cy="229" r="10" fill="#0c1b2a"/>
+    <circle cx="154" cy="224" r="3.5" fill="#fff"/>
+    <path d="M100 286c20 16 50 20 76 8" stroke="#162a3d" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <!-- sea in front -->
+    <path d="M0 438C64 414 118 458 184 436S300 412 364 436S466 458 512 432V512H0Z" fill="#0a2c4a"/>
+    <path d="M0 438C64 414 118 458 184 436S300 412 364 436S466 458 512 432" stroke="#5fb3e0" stroke-width="5" fill="none" opacity=".5"/>
+  </g>
 </svg>

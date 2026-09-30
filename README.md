@@ -1,11 +1,21 @@
+<p align="center"><img src="docs/logo.png" width="128" alt="Whale Cabinet logo"></p>
+
 # Whale Cabinet
 
-A native Linux file manager with a flat filing-cabinet look (Tauri 2: Rust backend + TypeScript/Vite frontend).
-Window class / Wayland app id: `whale-cabinet`.
+A Linux file manager with a flat filing-cabinet look: folders are drawers you pull out, files are paper.
+Built with Tauri 2 (Rust + TypeScript), made for Wayland/Hyprland and DankMaterialShell, and a drop-in
+replacement for Dolphin (same places, tags and ratings). Window class / Wayland app id: `whale-cabinet`.
 
-
+**Highlights:** tabs and split view · fuzzy quick open (Ctrl+P) and zoxide jumps (Ctrl+J) · a command palette
+(Ctrl+Shift+P) · git badges and actions · network locations (SFTP, SMB, WebDAV, NFS) · a built-in viewer for
+pictures, PDFs, video, code and Markdown · tags, colours and ratings shared with Dolphin · duplicate finder and
+disk-usage map · encryption · administrator actions through polkit · live theming from DMS and Hyprland ·
+**plugins** (Nextcloud, Immich and Bitwarden included).
 
 ## Install
+
+Download the AppImage or the .deb from [Releases](https://github.com/PluginMike/whale-cabinet/releases)
+(plus the plugins archive, unpacked into `~/.local/share/whale-cabinet/`), or build it yourself:
 
 ```sh
 scripts/install.sh              # build + install to ~/.local/bin (Dolphin stays the default)
@@ -86,7 +96,7 @@ fish users with a user-local rustup: `fish_add_path ~/.cargo/bin`.
 ## Tests
 
 ```sh
-(cd src-tauri && cargo test)   # 68 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
+(cd src-tauri && cargo test)   # 69 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
                                # dms-colors.json, hyprctl JSON), .desktop/mimeapps/globs, thumbnails, xbel, search, pty,
                                # fuzzy ranking, git porcelain, recently-used.xbel, gio prompts, admin helper, duplicates, plugins…
 (cd src-tauri && cargo test real_system -- --ignored --nocapture)   # Open With / icons against this machine
@@ -166,6 +176,16 @@ file), asking for the password — or, for key-encrypted files, gpg's own pinent
 
 ### Plugins
 
+Settings → **Plugins** (also Tools → *Plugins…* in the sidebar) lists the installed plugins with their settings
+and instructions. Included:
+
+- [**Nextcloud**](plugins/nextcloud/README.md): sync-status badges from the desktop client, Share… / Copy Public
+  Link / Open in Browser
+- [**Immich**](plugins/immich/README.md): your photo library as folders, smart search, upload and delete
+- [**Bitwarden**](plugins/bitwarden/README.md): search your vault from the palette, copy passwords and TOTP codes
+
+#### Writing a plugin
+
 A plugin is a folder in `~/.local/share/whale-cabinet/plugins/<name>/` with a `plugin.json` and an executable in
 any language. Whale Cabinet starts it once (it runs as you, so the first time it asks whether to allow it; Settings
 → Plugins turns it off again) and keeps it running, talking JSON lines over stdin/stdout.
@@ -210,37 +230,6 @@ in any order (so a plugin can work on several at once). Unasked messages `{"even
 
 An entry is `{name, path, dir?, size?, mtime? (ms), score? (sort order, highest first), thumb? (true), count?
 (a folder's "12 photos"), where?, info?: [[label, value]…]}`; its `path` is a location of the plugin's scheme.
-
-#### Nextcloud (bundled)
-
-With the Nextcloud desktop client running, items in your synced folders (from `~/.config/Nextcloud/nextcloud.cfg`)
-get its sync state as a badge — **✓** synced (blue when shared), **↻** syncing, **!** a problem, **⊘** excluded —
-updated live as the client syncs (it's the client's local socket, the one Dolphin's overlays use).
-Right-click → Nextcloud: *Share…* (the client's share dialog), *Copy Public Link* (reuses the item's public link
-or creates one; needs an app password from Nextcloud → Settings → Security in Settings → Plugins, kept in your
-keyring), *Open in Browser* (the item in the web UI). Check: `python3 plugins/nextcloud/test_nextcloud.py`.
-
-#### Immich (bundled)
-
-Settings → Plugins → Immich: your server's URL and an API key (Immich → Account Settings → API Keys; the key goes
-to your keyring). The sidebar's Immich section opens **Timeline** (a folder per month), **Albums** and
-**Favorites** as thumbnail folders, with EXIF in the info panel and Quick Look (Space) on the preview image.
-Opening a photo downloads the original (kept in `~/.cache/whale-cabinet/plugins/immich/`) and opens it with your
-app; Ctrl+C, *Copy To…* and dragging out copy the originals. **Ctrl+F** in Immich (or "Immich: search…" in
-Ctrl+Shift+P) is smart search: type what's in the picture; Enter opens a result, Shift+Enter shows all of them.
-Paste or drop files onto an Immich location to upload them (into an album: added to it; into Favorites: marked),
-or right-click local photos → Immich → *Upload to Immich*; Del moves photos to Immich's trash (it asks first).
-Reading needs asset.read/view/download, album.read, timeline.read; changing needs asset.upload, albumAsset.create,
-asset.update and asset.delete.
-
-#### Bitwarden (bundled)
-
-Needs [rbw](https://github.com/doy/rbw) (`sudo pacman -S rbw`). Settings → Plugins → Bitwarden: your server (empty
-for bitwarden.com; a self-hosted Bitwarden or Vaultwarden URL otherwise) and email. Ctrl+Shift+P → *Bitwarden:
-search…*: type part of a name, username or folder; **Enter** copies the password, **Shift+Enter** the username,
-**Ctrl+Enter** the TOTP code. rbw's agent asks for your master password (pinentry) and keeps the vault unlocked
-for its `lock_timeout`; the plugin never sees it. Passwords and codes are copied marked sensitive and cleared
-after 30 s (unless you copied something else). Check: `python3 plugins/bitwarden/test_bitwarden.py`.
 
 ### Recent files
 
@@ -444,3 +433,13 @@ windowrulev2 = opacity 0.95 0.9, class:^(whale-cabinet)$
 windowrulev2 = float, class:^(whale-cabinet-dialog)$
 windowrulev2 = center, class:^(whale-cabinet-dialog)$
 ```
+
+## Contributing
+
+Issues and pull requests are welcome. `cargo test` (in `src-tauri`) and `npx tsc --noEmit` should pass;
+`WC_SUITES=browse,ops,plugins scripts/smoke.sh` runs the app end to end. Releases are built by GitHub Actions
+when a `v*` tag is pushed.
+
+## License
+
+[GPL-3.0-or-later](LICENSE)
