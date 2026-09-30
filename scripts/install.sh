@@ -19,7 +19,8 @@ command -v zoxide >/dev/null || missing+=(zoxide)
 command -v fd >/dev/null || command -v fdfind >/dev/null || missing+=(fd)
 command -v git >/dev/null || missing+=(git)
 command -v pkexec >/dev/null || missing+=(polkit)
-command -v gio >/dev/null && ls /usr/lib/gvfsd /usr/libexec/gvfsd /usr/lib/gvfs/gvfsd >/dev/null 2>&1 || missing+=(gvfs)
+gvfsd=; for f in /usr/lib/gvfsd /usr/libexec/gvfsd /usr/lib/gvfs/gvfsd /usr/libexec/gvfs/gvfsd; do [[ -x $f ]] && gvfsd=$f; done
+command -v gio >/dev/null && [[ -n $gvfsd ]] || missing+=(gvfs)
 if (( ${#missing[@]} )); then
   . /etc/os-release 2>/dev/null
   case " ${ID:-} ${ID_LIKE:-} " in
