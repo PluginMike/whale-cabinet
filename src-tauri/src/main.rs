@@ -314,26 +314,18 @@ fn watch_hyprland(app: AppHandle) {
 
 static DIALOG_N: AtomicU32 = AtomicU32::new(0);
 
-/// Give a window its own Wayland app id (so Hyprland rules can match `whale-cabinet-dialog`). GTK only forwards
-/// the id once the window's xdg_toplevel exists, i.e. when it maps, so it's set from the `map` signal.
-fn set_app_id(win: &tauri::WebviewWindow, id: &str) {
+/// Show a window with its own app id / WM class (so Hyprland rules can match `whale-cabinet-dialog`). GTK takes
+/// it from the program name when the toplevel is created, i.e. on the first show: set it just around that, so
+/// the compositor sees the right class from the very first commit (setting it later races the float rules).
+fn show_as(win: &tauri::WebviewWindow, id: &str) {
     use gtk::prelude::*;
-    let Ok(gw) = win.gtk_window() else { return };
-    let is_wayland = gtk::gdk::Display::default().map(|d| d.type_().name() == "GdkWaylandDisplay").unwrap_or(false);
-    if !is_wayland {
-        // NOTE: on X11 dialogs keep WM class whale-cabinet; add XSetClassHint if an X11 user needs rules for them.
-        return;
+    if let Ok(gw) = win.gtk_window() {
+        let prev = gtk::glib::prgname();
+        gtk::glib::set_prgname(Some(id));
+        gw.show_all();
+        gtk::glib::set_prgname(prev.as_deref());
     }
-    let id = std::ffi::CString::new(id).unwrap();
-    gw.connect_map(move |w| {
-        extern "C" {
-            fn gdk_wayland_window_set_application_id(w: *mut gtk::gdk::ffi::GdkWindow, id: *const std::os::raw::c_char);
-        }
-        if let Some(gdk_win) = w.window() {
-            use gtk::glib::translate::ToGlibPtr;
-            unsafe { gdk_wayland_window_set_application_id(gdk_win.to_glib_none().0, id.as_ptr()) };
-        }
-    });
+    let _ = win.show();
 }
 
 /// Open a small separate window (Properties, Open With, conflicts, settings) with class `whale-cabinet-dialog`.
@@ -353,8 +345,7 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
             .visible(false)
             .build()
             .map(|w| {
-                set_app_id(&w, "whale-cabinet-dialog");
-                let _ = w.show();
+                show_as(&w, "whale-cabinet-dialog");
                 let _ = w.set_focus();
             });
         let _ = tx.send(r.map_err(|e| e.to_string()));
