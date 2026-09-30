@@ -185,6 +185,43 @@ suites.ops = async (base) => {
   un();
 };
 
+suites.plugins = async (base) => {
+  const p = () => app.pane();
+  const q = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s);
+  check("consent asked first", (await until(() => !!q('.toast[data-plugin="demo"]'))) >= 0);
+  q('.toast[data-plugin="demo"] [data-v="1"]')!.click();
+  check("sidebar section", (await until(() => !!q('.plugin-sec .drawer[data-p="demo:/"]'))) >= 0);
+  q('.plugin-sec .drawer[data-p="demo:/"]')!.click();
+  check("virtual listing", (await until(() => names().includes("Album") && names().includes("pic 1.png"))) >= 0, names().join("|"));
+  check("opens as icons in the plugin's order", p().view === "grid" && p().sortKey === "rank" && names()[0] === "Album", `${p().view} ${p().sortKey} ${names()}`);
+  check("title from the plugin", document.title.includes("Demo —"), document.title);
+  const thumbOk = await until(() => { const i = q<HTMLImageElement>(".gthumb"); return !!i && i.complete && i.naturalWidth > 0; }, 8000);
+  check("thumbnail through wcplugin://", thumbOk >= 0, q<HTMLImageElement>(".gthumb")?.src);
+  const own = (await import("./menu")).fileMenu((p().selectPaths(["demo:/p/1/pic 1.png"]), p())).filter((x) => x !== "-").map((x: any) => x.label);
+  check("own menu for plugin items", own.includes("Copy To…") && own.includes("Own thing") && !own.includes("Move to Trash"), own.join("|"));
+  const pl = await import("./plugins");
+  const got = await pl.fetchFiles(["demo:/p/1/pic 1.png"]);
+  check("fetch downloads to the cache", (await invoke<boolean[]>("paths_exist", { paths: got }))[0] === true, got[0]);
+  const r = await (await import("./palette")).modes["plugin:demo"].query("pic 1", "");
+  check("palette search", r.items.length === 1 && !!r.items[0].img, JSON.stringify(r.items));
+
+  p().navigate(`${base}/play`);
+  await until(() => names().includes("a.md"));
+  check("badges under the plugin's roots", (await until(() => !!q(".pb-ok"))) >= 0);
+  p().selectPaths([`${base}/play/a.md`]);
+  const item = (await import("./menu")).fileMenu(p()).find((x: any) => x.label === "Demo") as any;
+  const sub = item ? await item.sub() : [];
+  const labels = sub.map((x: any) => x.label);
+  check("action submenu, mime-filtered", labels.includes("Say hello") && !labels.includes("Images only"), labels.join("|"));
+  sub.find((x: any) => x.label === "Say hello")?.act();
+  let acted = "";
+  for (let i = 0; i < 50 && !acted; i++) { await sleep(100); acted = (await invoke<{ text: string }>("read_text", { path: `${base}/acted`, max: 1000 }).catch(() => ({ text: "" }))).text; }
+  check("action ran with the paths", acted === `hello ${base}/play/a.md`, acted);
+  await invoke("plugin_set", { name: "demo", key: "url", value: "http://example" });
+  const v = await invoke<Record<string, string>>("plugin_settings", { name: "demo" });
+  check("settings saved, plugin restarted", v.url === "http://example" && (await until(() => !!q('.plugin-sec .drawer[data-p="demo:/"]'))) >= 0);
+};
+
 // "repl" suite: run JS dropped into $WC_SELFTEST/cmd.js (dev only), log the result.
 suites.repl = async () => {
   (window as any).app = app;

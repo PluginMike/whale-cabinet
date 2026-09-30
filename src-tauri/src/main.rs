@@ -13,6 +13,7 @@ mod mounts;
 mod network;
 mod ops;
 mod places;
+mod plugins;
 mod preview;
 mod props;
 mod recent;
@@ -1176,6 +1177,11 @@ fn main() {
         .manage(search::Searches::default())
         .manage(std::sync::Arc::new(fuzzy::Fuzzy::default()))
         .manage(usage::Scans::default())
+        .manage(plugins::Plugins::default())
+        .register_asynchronous_uri_scheme_protocol("wcplugin", |ctx, req, responder| {
+            let (app, uri) = (ctx.app_handle().clone(), req.uri().to_string());
+            std::thread::spawn(move || responder.respond(plugins::protocol(&app, &uri)));
+        })
         .setup(|app| {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
@@ -1210,6 +1216,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            plugins::plugins_list, plugins::plugin_consent, plugins::plugin_start, plugins::plugin_call, plugins::plugin_settings, plugins::plugin_set, plugins::mime_types,
             start_args, open_window, git_act, git_diff, git_difftool, has_difftool, gpg_keys, encrypt_item, is_symmetric, decrypt_item, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,

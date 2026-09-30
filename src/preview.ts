@@ -124,6 +124,7 @@ type Big = { el: HTMLElement; tools?: HTMLElement };
 async function previewOf(e: Entry, big: boolean): Promise<Big | null> {
   const x = ext(e), k = kindOf(e);
   const url = assetUrl(e.path);
+  if (e.preview) { const i = new Image(); i.src = e.preview; i.draggable = false; return { el: i }; }
   if (e.dir || e.special || e.broken) return null;
   if (k === "img") { const i = new Image(); i.src = url; i.draggable = false; return { el: i }; }
   if (k === "vid") { const v = document.createElement("video"); v.src = url; v.controls = true; v.preload = "metadata"; return { el: v }; }

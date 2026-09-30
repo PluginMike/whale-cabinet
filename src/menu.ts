@@ -1,7 +1,7 @@
 // Context menu (right-click, Menu key, Shift+F10) with Open With, New, clipboard, archives, colour/tags,
 // trash and Properties; also the Move/Copy prompt for files dropped in from other apps.
 import { Entry, invoke, esc, baseName, assetUrl, TAG_COLORS, tagLabel, tagColor } from "./util";
-import { hooks, pane, flash, toggleHidden, host, newTab } from "./app";
+import { hooks, pane, flash, toggleHidden, host, newTab, scheme } from "./app";
 import { Pane } from "./pane";
 import * as ops from "./ops";
 import { editTags, newTag, manageTags, plainTags, refreshTags } from "./tags";
@@ -135,6 +135,8 @@ export function fileMenu(p: Pane): Item[] {
   const es = p.selected();
   const inTrash = p.loc === "trash:/";
   const dir = p.targetDir();
+  const own = hooks.locMenu[scheme(p.loc)];
+  if (own) return own(p, es);
   if (inTrash) {
     return [
       { label: "Restore", off: !es.length, kb: "Ctrl+R", act: () => ops.restoreSel(p) },

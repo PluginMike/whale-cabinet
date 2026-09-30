@@ -584,3 +584,12 @@ body.dragging #shelf.empty { display: block; }
 .dv-body { flex: 1; min-height: 0; overflow: auto; border-radius: calc(var(--radius) * .5); }
 .dv-body pre { margin: 0; padding: 10px 12px; background: var(--paper); color: var(--on-paper); font-size: .88em; line-height: 1.45; min-height: 100%; }
 .us-load .us-n { font-size: 4.6px; }
+
+/* plugins: status badges (next to git's), palette thumbnails, settings */
+.gitb + .gitb { margin-left: 4px; }
+.pb-ok { background: var(--t-green); } .pb-sync { background: var(--accent); } .pb-warn { background: var(--t-orange); }
+.pb-error { background: var(--t-red); } .pb-shared { background: var(--t-blue); }
+.pal-img { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+.plugin-set { padding: 6px 0; border-top: 1px solid var(--divider); }
+.plugin-set:first-of-type { border-top: 0; }
+.toast.plugin-ask { max-width: min(760px, 92vw); }

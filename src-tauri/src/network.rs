@@ -294,19 +294,41 @@ pub fn browse(uri: &str) -> Result<Vec<Found>, String> {
 // ---------- keyring (secret-tool) ----------
 
 pub fn saved_password(uri: &str) -> Option<String> {
-    let o = Command::new("secret-tool").args(["lookup", "application", "whale-cabinet", "uri", uri]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    secret_lookup(&[("uri", uri)])
+}
+pub fn save_password(uri: &str, password: &str) -> Result<(), String> {
+    secret_store(&format!("Whale Cabinet: {uri}"), &[("uri", uri)], password)
+}
+pub fn forget_password(uri: &str) {
+    secret_clear(&[("uri", uri)]);
+}
+
+/// Keyring entries are tagged `application whale-cabinet` plus these attributes.
+fn secret_args<'a>(cmd: &'a str, attrs: &[(&'a str, &'a str)]) -> Vec<&'a str> {
+    let mut v = vec![cmd, "application", "whale-cabinet"];
+    for (k, val) in attrs {
+        v.extend([*k, *val]);
+    }
+    v
+}
+pub fn secret_lookup(attrs: &[(&str, &str)]) -> Option<String> {
+    let o = Command::new("secret-tool").args(secret_args("lookup", attrs)).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     let p = String::from_utf8_lossy(&o.stdout).trim_end_matches('\n').to_owned();
     (o.status.success() && !p.is_empty()).then_some(p)
 }
-pub fn save_password(uri: &str, password: &str) -> Result<(), String> {
+/// The secret goes to secret-tool on stdin, never on a command line.
+pub fn secret_store(label: &str, attrs: &[(&str, &str)], secret: &str) -> Result<(), String> {
+    let label = format!("--label={label}");
+    let mut args = secret_args("store", attrs);
+    args.insert(1, &label);
     let mut c = Command::new("secret-tool")
-        .args(["store", &format!("--label=Whale Cabinet: {uri}"), "application", "whale-cabinet", "uri", uri])
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("secret-tool: {e} (install libsecret)"))?;
-    c.stdin.take().unwrap().write_all(password.as_bytes()).map_err(|e| e.to_string())?;
+    c.stdin.take().unwrap().write_all(secret.as_bytes()).map_err(|e| e.to_string())?;
     let o = c.wait_with_output().map_err(|e| e.to_string())?;
     if o.status.success() {
         Ok(())
@@ -314,8 +336,8 @@ pub fn save_password(uri: &str, password: &str) -> Result<(), String> {
         Err(String::from_utf8_lossy(&o.stderr).trim().to_owned())
     }
 }
-pub fn forget_password(uri: &str) {
-    let _ = Command::new("secret-tool").args(["clear", "application", "whale-cabinet", "uri", uri]).status();
+pub fn secret_clear(attrs: &[(&str, &str)]) {
+    let _ = Command::new("secret-tool").args(secret_args("clear", attrs)).status();
 }
 
 #[cfg(test)]

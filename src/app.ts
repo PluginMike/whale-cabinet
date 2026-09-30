@@ -33,6 +33,8 @@ export const hooks: {
   keys: ((ev: KeyboardEvent, p: Pane) => boolean)[];
   /** git state letter for an entry (badges). */
   git?: (e: Entry) => string | undefined;
+  /** plugin status badge for an entry */
+  badge?: (e: Entry) => { text: string; title: string; state: string } | undefined;
   /** runs whenever the top bar/status is refreshed for the active pane */
   chrome: ((p: Pane) => void)[];
   /** extra folders to watch beyond what panes show (trash, .git dirs…) */
@@ -43,9 +45,12 @@ export const hooks: {
   group: Record<string, (e: Entry) => string>;
   rowScale: Record<string, number>;
   defaultSort: Record<string, string>;
-} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {}, menuExtra: [] };
+  defaultView: Record<string, View>;
+  /** per location scheme: the whole context menu (menu.ts Item[]) for its items */
+  locMenu: Record<string, (p: Pane, es: Entry[]) => any[]>;
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {}, defaultView: {}, locMenu: {}, menuExtra: [] };
 
-const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
+export const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
 // ---------- view per folder (settings.folderViews: path → view/sort/zoom last used there) ----------
 let viewSave = 0;
@@ -93,6 +98,8 @@ export const host: Host = {
   thumb(e) { return hooks.thumb?.(e); },
   count(e) { return hooks.count?.(e); },
   git(e) { return hooks.git?.(e); },
+  badge(e) { return hooks.badge?.(e); },
+  defaultView(loc) { return hooks.defaultView[scheme(loc)]; },
   groupOf(loc) { return hooks.group[scheme(loc)]; },
   rowScale(loc) { return hooks.rowScale[scheme(loc)] ?? 1; },
   defaultSort(loc) { return hooks.defaultSort[scheme(loc)]; },

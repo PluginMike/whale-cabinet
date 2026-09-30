@@ -29,6 +29,7 @@ if (dialog) {
   await import("./usage");
   await import("./crypt");
   await import("./actions");
+  await import("./plugins");
   await initTheme(app.applySettings);
   // extra windows get their targets in the URL; the first one reads argv
   const targets: { loc: string; select: string | null }[] = q.has("targets") ? JSON.parse(q.get("targets")!) : await invoke("start_args");

@@ -19,6 +19,39 @@ for n in ["a.md", "b 10.txt", "b 9.txt", "new\nline", "ünïcode 💾.pdf", ".se
     open(f"{play}/{n}", "w").close()
 os.symlink("nowhere", f"{play}/dangling"); os.mkfifo(f"{play}/pipe")
 PY
+# a demo plugin for the plugins suite: badges under play/, a demo: location with two "photos", search, actions
+mkdir -p "$T/plugins/demo" && cp src-tauri/icons/32x32.png "$T/plugins/demo/thumb.png"
+cat > "$T/plugins/demo/plugin.json" <<'JSON'
+{"title": "Demo", "description": "Test plugin", "exec": "demo.py", "badges": true, "scheme": "demo", "search": true,
+ "settings": [{"key": "url", "label": "URL"}],
+ "actions": [{"id": "hello", "label": "Say hello", "roots": true}, {"id": "img", "label": "Images only", "mime": ["image/*"], "roots": true},
+             {"id": "own", "label": "Own thing", "own": true}]}
+JSON
+cat > "$T/plugins/demo/demo.py" <<'PY'
+#!/usr/bin/env python3
+import json, os, shutil, sys, threading
+HERE = os.path.dirname(os.path.abspath(__file__)); T = os.path.dirname(os.path.dirname(HERE))
+out = threading.Lock(); cache = ""
+def say(m):
+    with out: print(json.dumps(m), flush=True)
+def photos(): return [{"name": f"pic {i}.png", "path": f"demo:/p/{i}/pic {i}.png", "thumb": True, "size": 1000 + i, "mtime": 1700000000000 + i, "score": i, "info": [["Camera", "Test"]]} for i in range(2)]
+def handle(m, a):
+    global cache
+    if m == "init": cache = a["cache"]; return {"roots": [T + "/play"], "sidebar": [{"title": "Demo photos", "loc": "demo:/"}]}
+    if m == "list" and a["loc"] == "demo:/": return {"title": "Demo", "entries": [{"name": "Album", "path": "demo:/album", "dir": True, "count": "2 photos", "score": 9}] + photos()}
+    if m == "list" and a["loc"] == "demo:/album": return {"title": "Album", "entries": photos()}
+    if m == "thumb": return {"file": HERE + "/thumb.png"}
+    if m == "fetch": dst = os.path.join(cache, os.path.basename(a["path"])); shutil.copy(HERE + "/thumb.png", dst); return {"file": dst}
+    if m == "badges": return {p: {"text": "✓", "title": "Synced", "state": "ok"} for p in a["paths"]}
+    if m == "action": open(T + "/acted", "w").write(a["id"] + " " + " ".join(a["paths"])); say({"event": "badges"}); return {"message": "done " + a["id"]}
+    if m == "search": return {"entries": [e for e in photos() if a["q"].lower() in e["name"]], "loc": "demo:/album"}
+    raise Exception("unknown " + m)
+def run(r):
+    try: say({"id": r["id"], "result": handle(r["method"], r.get("params", {}))})
+    except Exception as e: say({"id": r["id"], "error": str(e)})
+for line in sys.stdin: threading.Thread(target=run, args=(json.loads(line),)).start()
+PY
+chmod +x "$T/plugins/demo/demo.py"
 export PATH=$HOME/.cargo/bin:$PATH WC_SELFTEST=$T CARGO_HOME=${CARGO_HOME:-$HOME/.cargo} RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}
 shot() {
   command -v grim >/dev/null && command -v hyprctl >/dev/null || return 0

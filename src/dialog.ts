@@ -62,4 +62,38 @@ async function settingsDialog() {
     if (t.type === "range") t.nextElementSibling!.textContent = `${Math.round(+t.value * 100)}%`;
     invoke("set_settings", { patch: { [t.name]: v } });
   });
+  body.append(await pluginSettings());
+}
+
+/** Settings → Plugins: allow or stop each one, and its own settings (secrets go to the keyring). */
+async function pluginSettings() {
+  type P = { name: string; title: string; description: string; consent: boolean | null; settings: { key: string; label: string; secret: boolean; placeholder: string }[] };
+  const list = await invoke<P[]>("plugins_list").catch(() => [] as P[]);
+  const box = document.createElement("fieldset");
+  box.innerHTML = `<legend>Plugins</legend>` + (list.length ? "" : `<p class="hint">None installed.</p>`) +
+    `<p class="hint">Plugins live in <code>~/.local/share/whale-cabinet/plugins/</code> and run as you. Changes restart the plugin.</p>`;
+  for (const p of list) {
+    const vals = p.consent ? await invoke<Record<string, string | boolean>>("plugin_settings", { name: p.name }).catch(() => ({} as Record<string, string | boolean>)) : {};
+    const d = document.createElement("div");
+    d.className = "plugin-set";
+    d.innerHTML = `<label><input type="checkbox" data-consent ${p.consent ? "checked" : ""}> <b>${esc(p.title)}</b></label>
+      ${p.description ? `<p class="hint">${esc(p.description)}</p>` : ""}
+      ${p.settings.map((s) => s.secret
+        ? `<label>${esc(s.label)} <input type="password" data-key="${esc(s.key)}" autocomplete="off" placeholder="${vals[s.key] ? "saved in your keyring (type to replace)" : esc(s.placeholder || "not set")}"></label>`
+        : `<label>${esc(s.label)} <input data-key="${esc(s.key)}" spellcheck="false" placeholder="${esc(s.placeholder)}" value="${esc(String(vals[s.key] ?? ""))}"></label>`).join("")}`;
+    d.querySelectorAll<HTMLInputElement>("[data-key]").forEach((i) => (i.disabled = !p.consent));
+    d.addEventListener("change", async (e) => {
+      const t = e.target as HTMLInputElement;
+      try {
+        if (t.dataset.consent !== undefined) { await invoke("plugin_consent", { name: p.name, allow: t.checked }); d.querySelectorAll<HTMLInputElement>("[data-key]").forEach((i) => (i.disabled = !t.checked)); }
+        else if (t.dataset.key) {
+          await invoke("plugin_set", { name: p.name, key: t.dataset.key, value: t.value.trim() });
+          if (t.type === "password") { t.placeholder = t.value ? "saved in your keyring (type to replace)" : "not set"; t.value = ""; }
+        }
+        d.querySelector(".err")?.remove();
+      } catch (err) { d.querySelector(".err")?.remove(); d.insertAdjacentHTML("beforeend", `<p class="err">${esc(String(err))}</p>`); }
+    });
+    box.append(d);
+  }
+  return box;
 }

@@ -289,8 +289,9 @@ async function dropOn(t: Target, paths: string[], copy: boolean) {
 }
 
 hooks.drag = (p, ev) => startDrag(selPaths(p), ev);
-/** Drag these paths (from a pane or the shelf): onto folders, drawers, tags, the trash, the shelf, or out of the window. */
-export function startDrag(paths: string[], ev: MouseEvent) {
+/** Drag these paths (from a pane or the shelf): onto folders, drawers, tags, the trash, the shelf, or out of the window.
+ *  `files` turns them into local files first (plugin items are downloaded when the drag starts). */
+export function startDrag(paths: string[], ev: MouseEvent, files?: Promise<string[]>) {
   if (!paths.length) return;
   document.body.classList.add("dragging");
   const ghost = document.createElement("div");
@@ -307,14 +308,14 @@ export function startDrag(paths: string[], ev: MouseEvent) {
     // Left the window with the button held: hand over to a native drag so other apps can take the files.
     if (m.clientX <= 0 || m.clientY <= 0 || m.clientX >= innerWidth - 1 || m.clientY >= innerHeight - 1) {
       end();
-      invoke<string>("drag_icon").then((icon) => nativeDrag({ item: paths, icon })).catch((e) => flash(String(e)));
+      Promise.all([invoke<string>("drag_icon"), files ?? paths]).then(([icon, item]) => nativeDrag({ item, icon })).catch((e) => flash(String(e)));
       return;
     }
     const t = targetAt(m.clientX, m.clientY);
     hover(t && !(t.kind === "dir" && paths.includes(t.path)) ? t : null);
     ghost.dataset.op = m.ctrlKey ? "copy" : "move";
   };
-  const up = (m: MouseEvent) => { const t = over; end(); if (t) dropOn(t, paths, m.ctrlKey); };
+  const up = async (m: MouseEvent) => { const t = over; end(); if (t) dropOn(t, files ? await files.catch((e) => { flash(String(e)); return []; }) : paths, m.ctrlKey || !!files); };
   window.addEventListener("mousemove", move);
   window.addEventListener("mouseup", up);
 };

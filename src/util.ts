@@ -9,6 +9,8 @@ export type Entry = {
   /** recent view: last use (ms) and the app it was opened with */ used?: number; app?: string;
   /** duplicates view: which set of identical files */ group?: number;
   /** trash view only */ trashId?: string; origPath?: string; deleted?: number;
+  /** plugin locations: thumbnail / preview URLs, where it lives, a folder's count, info-panel details */
+  thumb?: string; preview?: string; where?: string; count?: string; info?: [string, string][];
 };
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;

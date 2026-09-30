@@ -86,9 +86,9 @@ fish users with a user-local rustup: `fish_add_path ~/.cargo/bin`.
 ## Tests
 
 ```sh
-(cd src-tauri && cargo test)   # 63 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
+(cd src-tauri && cargo test)   # 68 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
                                # dms-colors.json, hyprctl JSON), .desktop/mimeapps/globs, thumbnails, xbel, search, pty,
-                               # fuzzy ranking, git porcelain, recently-used.xbel, gio prompts, admin helper, duplicates…
+                               # fuzzy ranking, git porcelain, recently-used.xbel, gio prompts, admin helper, duplicates, plugins…
 (cd src-tauri && cargo test real_system -- --ignored --nocapture)   # Open With / icons against this machine
 scripts/smoke.sh               # launches the app: end-to-end UI run against a temp tree (10k files, odd names),
                                # file ops, DMS re-theme timing, built-in fallback; grim screenshots
@@ -163,6 +163,45 @@ Right-click → **Encrypt…** makes `name.gpg` next to the item with a password
 stdin, never on a command line) or to a key in your gpg keyring; folders are packed into `name.tar.gpg`. It can
 move the original to the trash afterwards. Opening a `.gpg` file decrypts it next to itself (never over an existing
 file), asking for the password — or, for key-encrypted files, gpg's own pinentry asks for your key's passphrase.
+
+### Plugins
+
+A plugin is a folder in `~/.local/share/whale-cabinet/plugins/<name>/` with a `plugin.json` and an executable in
+any language. Whale Cabinet starts it once (it runs as you, so the first time it asks whether to allow it; Settings
+→ Plugins turns it off again) and keeps it running, talking JSON lines over stdin/stdout.
+
+```json
+{
+  "title": "Photos", "description": "…", "exec": "photos.py",
+  "settings": [{ "key": "url", "label": "Server URL" }, { "key": "key", "label": "API key", "secret": true }],
+  "actions": [{ "id": "share", "label": "Share…", "roots": true, "mime": ["image/*"], "ext": ["jpg"], "multi": true }],
+  "badges": true, "scheme": "photos", "search": true, "icon": "M4 4h16v16H4z"
+}
+```
+
+- `settings` show up in Settings → Plugins; `secret` ones go to your keyring (secret-tool), never to a file.
+- `actions` appear under a submenu named after the plugin, filtered by mime glob / extension, `roots` (only
+  inside the folders `init` returned), `own` (on the plugin's own items instead of local files), `multi`.
+- `badges`: a status badge for items under the roots, next to git's.
+- `scheme`: virtual locations `photos:…` — listed, with thumbnails, opened (downloaded first), dragged out, copied.
+- `search`: a palette search (Ctrl+F in its locations, or "Photos: search…" in Ctrl+Shift+P).
+
+Requests are `{"id": 1, "method": "…", "params": {…}}`; answer `{"id": 1, "result": …}` or `{"id": 1, "error": "…"}`,
+in any order (so a plugin can work on several at once). Unasked messages `{"event": "badges", "paths": […]}`
+(re-ask those; no paths = all), `{"event": "reload"}` (re-list its locations) or `{"event": "message", "text": "…"}`.
+
+| method | params | result |
+|---|---|---|
+| `init` (always first) | `settings`, `cache` (a folder for downloads), `home` | `{roots?: [dir…], sidebar?: [{title, loc}…]}` |
+| `badges` | `paths` | `{path: {text, title, state: ok\|sync\|warn\|error\|shared} \| null}` |
+| `action` | `id`, `paths` | `{message?}` (shown in the status bar) |
+| `list` | `loc` | `{title?, entries: [entry…]}` |
+| `thumb` | `path`, `size?` (`preview` = big) | `{file}` — an image file |
+| `fetch` | `path` | `{file}` — the item downloaded to a local file |
+| `search` | `q` | `{entries, loc?}` — `loc` lists all results |
+
+An entry is `{name, path, dir?, size?, mtime? (ms), score? (sort order, highest first), thumb? (true), count?
+(a folder's "12 photos"), where?, info?: [[label, value]…]}`; its `path` is a location of the plugin's scheme.
 
 ### Recent files
 

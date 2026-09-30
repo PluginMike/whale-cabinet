@@ -32,6 +32,10 @@ export interface Host {
   viewChanged(p: Pane): void;
   /** git state letter (C M S U I) for badges. */
   git(e: Entry): string | undefined;
+  /** a plugin's status badge (state = ok | sync | warn | error | shared) */
+  badge(e: Entry): { text: string; title: string; state: string } | undefined;
+  /** View a location opens with (plugin photo folders open as icons). */
+  defaultView(loc: string): View | undefined;
   syncWatch(): void;
   flash(msg: string): void;
 }
@@ -202,7 +206,8 @@ export class Pane {
     if (loc === this.loc) { if (select) { this.sel.clear(); this.sel.add(select); this.focus = this.anchor = select; this.scrollTo(select); this.refreshSel(); } return; }
     if (push && this.loc) { this.back.push(this.loc); this.fwd.length = 0; }
     this.loc = loc;
-    const ds = this.host.defaultSort(loc), fv = isFolder(loc) ? this.host.folderView(loc) : undefined;
+    const ds = this.host.defaultSort(loc), fv = isFolder(loc) ? this.host.folderView(loc) : undefined, dv = this.host.defaultView(loc);
+    if (dv && dv !== this.view) { this.view = dv; this.el.dataset.view = dv; }
     if (ds) this.sortKey = ds;
     else if (fv) {
       this.sortKey = fv.sortKey; this.asc = fv.asc;
@@ -284,8 +289,10 @@ export class Pane {
       const tags = e.tags?.filter((t) => !t.startsWith("color:")).length ? `<span class="tagdots">${e.tags!.filter((t) => !t.startsWith("color:")).slice(0, 3).map((t) => `<i title="${esc(t)}"${tagColor(t) ? ` style="background:${tagColor(t)}"` : ""}></i>`).join("")}</span>` : "";
       const size = e.dir ? (e.trashId ? "" : this.host.count(e) ?? "") : e.special || e.broken ? "" : fmtSize(e.size);
       // virtual views (search, tags, trash) mix folders: show where each item lives
-      const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";
-      const gitb = gs && gs !== "I" ? `<span class="gitb g-${gs}" title="${GIT_NAMES[gs]}">${GIT_MARKS[gs]}</span>` : "";
+      const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(e.where ?? parentOf(e.origPath ?? e.path)))}</span>` : "";
+      const pb = this.host.badge(e);
+      const gitb = (gs && gs !== "I" ? `<span class="gitb g-${gs}" title="${GIT_NAMES[gs]}">${GIT_MARKS[gs]}</span>` : "") +
+        (pb ? `<span class="gitb pb-${esc(pb.state)}" title="${esc(pb.title)}">${esc(pb.text)}</span>` : "");
       const meta = `${where}${tags}${gitb}<span class="meta size">${size}</span>${e.app ? `<span class="meta app">${esc(e.app)}</span>` : ""}<span class="meta date">${fmtDate(e.deleted ?? e.used ?? e.mtime)}</span>`;
       if (g.grid) {
         const art = e.dir ? `<div class="gfold grab"></div>` : thumb ? `<img class="gthumb grab" src="${thumb}" loading="lazy" draggable="false">` : `<div class="gpaper grab">${badge}</div>`;

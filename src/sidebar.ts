@@ -20,19 +20,26 @@ const ICONS: Record<string, string> = {
   tags: '<path d="M3 12V3h9l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
   tools: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
 };
-document.querySelectorAll<HTMLElement>("#sidebar .sec").forEach((sec) => {
+let collapsed: string[] = [];
+/** Icon, click-to-collapse (remembered) for a sidebar section; plugins add theirs at runtime. */
+export function setupSection(sec: HTMLElement, icon = ICONS[sec.dataset.sec!] ?? "") {
   const h = sec.querySelector("h3")!;
-  h.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[sec.dataset.sec!] ?? ""}</svg><span>${h.textContent}</span><i class="sec-chev"></i>`;
+  h.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg><span>${esc(h.textContent ?? "")}</span><i class="sec-chev"></i>`;
+  sec.classList.toggle("collapsed", collapsed.includes(sec.dataset.sec!));
   h.tabIndex = 0;
   h.addEventListener("click", () => {
     sec.classList.toggle("collapsed");
-    const closed = [...document.querySelectorAll<HTMLElement>("#sidebar .sec.collapsed")].map((x) => x.dataset.sec);
-    invoke("set_settings", { patch: { collapsed: closed } });
+    // sections of plugins that aren't loaded right now keep their state
+    const here = [...document.querySelectorAll<HTMLElement>("#sidebar .sec")].map((x) => x.dataset.sec!);
+    collapsed = [...collapsed.filter((k) => !here.includes(k)), ...[...document.querySelectorAll<HTMLElement>("#sidebar .sec.collapsed")].map((x) => x.dataset.sec!)];
+    invoke("set_settings", { patch: { collapsed } });
   });
   h.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); h.click(); } });
-});
+}
+document.querySelectorAll<HTMLElement>("#sidebar .sec").forEach((sec) => setupSection(sec));
 invoke<Record<string, any>>("get_settings").then((s) => {
-  for (const k of s.collapsed ?? []) document.querySelector(`#sidebar .sec[data-sec="${k}"]`)?.classList.add("collapsed");
+  collapsed = s.collapsed ?? [];
+  for (const k of collapsed) document.querySelector(`#sidebar .sec[data-sec="${k}"]`)?.classList.add("collapsed");
 });
 
 // ---------- places ----------
