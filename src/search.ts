@@ -4,7 +4,7 @@ import { $, Entry, invoke } from "./util";
 import { hooks, pane, allPanes, flash, HOME } from "./app";
 import { isFolder } from "./pane";
 
-type Q = { id: number; root: string; q: string; content: boolean; hidden: boolean };
+type Q = { id: number; root: string; q: string; content: boolean; hidden: boolean; fuzzy?: boolean };
 let nextId = 1 + Math.floor(Math.random() * 2 ** 30); // unique per window: hits go to every window
 const results = new Map<number, Entry[]>();
 const parse = (loc: string) => JSON.parse(loc.slice(7)) as Q;
@@ -13,6 +13,7 @@ const bar = document.createElement("div");
 bar.id = "searchbar";
 bar.hidden = true;
 bar.innerHTML = `<input id="sq" placeholder="Search file names (* and ? work)…" spellcheck="false">
+  <label title="Letters in order, not necessarily together (\"rprt\" finds report); best matches first"><input type="checkbox" id="s-fuzzy"> Fuzzy</label>
   <label><input type="checkbox" id="s-content"> Content</label>
   <label><input type="checkbox" id="s-hidden"> Hidden</label>
   <select id="s-where"><option value="here">From here</option><option value="home">Home</option><option value="root">Everywhere</option></select>
@@ -24,7 +25,7 @@ const val = (id: string) => bar.querySelector<HTMLInputElement>(id)!;
 export function openSearch() {
   bar.hidden = false;
   const p = pane();
-  if (p.loc.startsWith("search:")) { const q = parse(p.loc); input.value = q.q; val("#s-content").checked = q.content; }
+  if (p.loc.startsWith("search:")) { const q = parse(p.loc); input.value = q.q; val("#s-content").checked = q.content; val("#s-fuzzy").checked = !!q.fuzzy; }
   input.focus(); input.select();
 }
 function closeSearch() {
@@ -39,8 +40,11 @@ function run() {
   const here = isFolder(p.loc) ? p.loc : p.loc.startsWith("search:") ? parse(p.loc).root : HOME;
   const where = (bar.querySelector("#s-where") as HTMLSelectElement).value;
   const root = where === "home" ? HOME : where === "root" ? "/" : here;
-  const s: Q = { id: nextId++, root, q, content: val("#s-content").checked, hidden: val("#s-hidden").checked };
+  const content = val("#s-content").checked;
+  const s: Q = { id: nextId++, root, q, content, hidden: val("#s-hidden").checked, fuzzy: val("#s-fuzzy").checked && !content };
   p.navigate(`search:${JSON.stringify(s)}`, !p.loc.startsWith("search:"));
+  p.sortKey = s.fuzzy ? "rank" : p.sortKey === "rank" ? "name" : p.sortKey;
+  p.rebuild();
   p.scroller.focus();
 }
 input.addEventListener("keydown", (e) => {
@@ -56,12 +60,12 @@ hooks.virtual!["search:"] = async (loc) => {
   const s = parse(loc);
   if (!results.has(s.id)) {
     results.set(s.id, []);
-    invoke("search_start", { id: s.id, root: s.root, text: s.q, content: s.content, hidden: s.hidden });
+    invoke("search_start", { id: s.id, root: s.root, text: s.q, content: s.content, hidden: s.hidden, fuzzy: !!s.fuzzy });
     flash(`Searching ${s.root === "/" ? "everywhere" : s.root}…`);
   }
   return results.get(s.id)!;
 };
-hooks.locTitle!["search:"] = (loc) => { const s = parse(loc); return `Search: “${s.q}”${s.content ? " (content)" : ""}`; };
+hooks.locTitle!["search:"] = (loc) => { const s = parse(loc); return `Search: “${s.q}”${s.content ? " (content)" : s.fuzzy ? " (fuzzy)" : ""}`; };
 
 listen<{ id: number; entries: Entry[]; done: boolean }>("search-hits", ({ payload }) => {
   const list = results.get(payload.id); if (!list) return;

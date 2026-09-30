@@ -21,6 +21,9 @@ pub struct Entry {
     pub mtime: i64,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// Relevance in ranked views (fuzzy search), higher is better.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<u32>,
 }
 
 // NOTE: non-UTF-8 names are shown lossily and can't be round-tripped; send raw bytes if that ever matters.
@@ -76,6 +79,7 @@ pub fn entry(path: &Path) -> Option<Entry> {
         broken,
         special,
         tags: vec![],
+        score: None,
     })
 }
 

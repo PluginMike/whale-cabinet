@@ -2,6 +2,7 @@
 
 mod desktop;
 mod fm1;
+mod fuzzy;
 mod jobs;
 mod listing;
 mod mounts;
@@ -391,6 +392,21 @@ fn open_window(app: AppHandle, loc: String) {
     new_window(&app, vec![listing::Target { loc, select: None }]);
 }
 
+// ---------- quick open (Ctrl+P) ----------
+
+#[tauri::command]
+async fn fuzzy_find(q: String, limit: usize, window: tauri::Window, app: AppHandle) -> R<fuzzy::Found> {
+    let root = dirs::home_dir().unwrap_or_else(|| "/".into());
+    blocking(move || {
+        let label = window.label().to_owned();
+        let a = app.clone();
+        app.state::<std::sync::Arc<fuzzy::Fuzzy>>().find(root, &q, limit, move || {
+            let _ = a.emit_to(label.as_str(), "fuzzy-ready", ());
+        })
+    })
+    .await
+}
+
 // ---------- zoxide ----------
 
 #[tauri::command]
@@ -687,6 +703,7 @@ fn main() {
         .manage(jobs::Clip::default())
         .manage(term::Terms::default())
         .manage(search::Searches::default())
+        .manage(std::sync::Arc::new(fuzzy::Fuzzy::default()))
         .setup(|app| {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
@@ -718,7 +735,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, fuzzy_find, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

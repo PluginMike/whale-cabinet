@@ -5,6 +5,7 @@ export type Entry = {
   name: string; path: string; dir: boolean; link: boolean; broken: boolean;
   special: string; hidden: boolean; size: number; mtime: number;
   tags?: string[];
+  /** ranked views (fuzzy search, recent, duplicates): higher first */ score?: number;
   /** trash view only */ trashId?: string; origPath?: string; deleted?: number;
 };
 

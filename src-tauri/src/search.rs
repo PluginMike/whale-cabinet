@@ -2,6 +2,8 @@
 //! by content. Results stream to the UI in batches; searches can be cancelled.
 
 use crate::listing::{self, Entry};
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Read;
@@ -19,20 +21,26 @@ pub struct Query {
     pub glob: bool,
     pub content: bool,
     pub hidden: bool,
+    /// Fuzzy name matching (nucleo), results carry a score.
+    pub fuzzy: Option<Pattern>,
 }
 
 impl Query {
     pub fn new(text: &str, content: bool, hidden: bool) -> Self {
         let glob = !content && text.contains(['*', '?', '[']);
-        Query { text: text.to_lowercase(), glob, content, hidden }
+        Query { text: text.to_lowercase(), glob, content, hidden, fuzzy: None }
     }
-    pub fn name_matches(&self, name: &str) -> bool {
-        let n = name.to_lowercase();
-        if self.glob {
-            crate::desktop::glob_match(&self.text, &n)
-        } else {
-            n.contains(&self.text)
+    pub fn fuzzy(text: &str, hidden: bool) -> Self {
+        Query { fuzzy: Some(Pattern::parse(text, CaseMatching::Smart, Normalization::Smart)), ..Query::new(text, false, hidden) }
+    }
+    /// None = no match; Some(score) otherwise (0 for plain substring/glob matches).
+    pub fn name_score(&self, name: &str, m: &mut Matcher, buf: &mut Vec<char>) -> Option<u32> {
+        if let Some(p) = &self.fuzzy {
+            return p.score(Utf32Str::new(name, buf), m);
         }
+        let n = name.to_lowercase();
+        let ok = if self.glob { crate::desktop::glob_match(&self.text, &n) } else { n.contains(&self.text) };
+        ok.then_some(0)
     }
 }
 
@@ -51,6 +59,7 @@ pub fn content_matches(p: &Path, needle: &str) -> bool {
 /// Walk `root`, calling `hit` for every match. Symlinked folders aren't followed; /proc, /sys, /dev are skipped.
 pub fn walk(root: &Path, q: &Query, cancel: &AtomicBool, mut hit: impl FnMut(Entry)) {
     let mut stack = vec![root.to_path_buf()];
+    let (mut m, mut buf) = (Matcher::new(Config::DEFAULT), Vec::new());
     while let Some(d) = stack.pop() {
         if cancel.load(Ordering::Relaxed) {
             return;
@@ -66,9 +75,10 @@ pub fn walk(root: &Path, q: &Query, cancel: &AtomicBool, mut hit: impl FnMut(Ent
             if ft.is_dir() && !matches!(p.to_str(), Some("/proc" | "/sys" | "/dev" | "/run")) {
                 stack.push(p.clone());
             }
-            let ok = if q.content { ft.is_file() && content_matches(&p, &q.text) } else { q.name_matches(&name) };
-            if ok {
-                if let Some(en) = listing::entry(&p) {
+            let score = if q.content { (ft.is_file() && content_matches(&p, &q.text)).then_some(0) } else { q.name_score(&name, &mut m, &mut buf) };
+            if let Some(sc) = score {
+                if let Some(mut en) = listing::entry(&p) {
+                    en.score = q.fuzzy.is_some().then_some(sc);
                     hit(en);
                 }
             }
@@ -84,11 +94,11 @@ struct Hits {
 }
 
 #[tauri::command]
-pub fn search_start(id: u32, root: String, text: String, content: bool, hidden: bool, app: AppHandle, s: State<Searches>) {
+pub fn search_start(id: u32, root: String, text: String, content: bool, hidden: bool, fuzzy: Option<bool>, app: AppHandle, s: State<Searches>) {
     let cancel = Arc::new(AtomicBool::new(false));
     s.0.lock().unwrap().insert(id, cancel.clone());
     std::thread::spawn(move || {
-        let q = Query::new(&text, content, hidden);
+        let q = if fuzzy == Some(true) && !content { Query::fuzzy(&text, hidden) } else { Query::new(&text, content, hidden) };
         let mut batch = vec![];
         let mut last = Instant::now();
         walk(Path::new(&root), &q, &cancel, |e| {
@@ -134,6 +144,10 @@ mod tests {
         assert_eq!(run(Query::new("report", false, true)), vec!["Report 2026.PDF", "report-hidden"]);
         assert_eq!(run(Query::new("*.pdf", false, false)), vec!["Report 2026.PDF"]);
         assert_eq!(run(Query::new("whale", true, false)), vec!["notes.md"], "binary files never match content");
+        let fz: Vec<_> = { let mut v = vec![]; walk(d, &Query::fuzzy("rprt26", false), &AtomicBool::new(false), |e| v.push((e.name, e.score))); v };
+        assert_eq!(fz.len(), 1);
+        assert_eq!(fz[0].0, "Report 2026.PDF");
+        assert!(fz[0].1.unwrap() > 0, "fuzzy hits carry a score");
         let cancelled = AtomicBool::new(true);
         let mut n = 0;
         walk(d, &Query::new("", false, true), &cancelled, |_| n += 1);

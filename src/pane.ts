@@ -100,6 +100,8 @@ export class Pane {
 
   // ---------- listing ----------
   private cmp = (a: Entry, b: Entry) => {
+    // "rank" (relevance) keeps the source's scores and ignores folders-first
+    if (this.sortKey === "rank") { const r = (b.score ?? 0) - (a.score ?? 0) || collator.compare(a.name, b.name); return this.asc ? r : -r; }
     if (a.dir !== b.dir) return a.dir ? -1 : 1;
     let r = 0;
     if (this.sortKey === "size") r = a.size - b.size;
@@ -170,6 +172,7 @@ export class Pane {
     if (loc === this.loc) { if (select) { this.sel.clear(); this.sel.add(select); this.focus = this.anchor = select; this.scrollTo(select); this.refreshSel(); } return; }
     if (push && this.loc) { this.back.push(this.loc); this.fwd.length = 0; }
     this.loc = loc;
+    if (isFolder(loc) && this.sortKey === "rank") this.sortKey = "name"; // relevance only means something in ranked views
     this.cache.clear(); this.expanded.clear(); this.sel.clear();
     this.filter = "";
     this.focus = this.anchor = select ?? "";
