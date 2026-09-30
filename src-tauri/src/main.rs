@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod admin;
 mod desktop;
 mod fm1;
 mod fuzzy;
@@ -605,6 +606,101 @@ fn open_terminal(dir: String, app: AppHandle) -> R<()> {
     desktop::spawn_detached(&desktop::terminal_argv(&t, &dir, &[]), Path::new(&dir))
 }
 
+// ---------- administrator ----------
+
+/// Conflicts can't happen for single-item requests; answer "cancel" if one ever does.
+struct NoAsk;
+impl ops::Report for NoAsk {
+    fn progress(&self, _: u64, _: u64, _: &Path) {}
+    fn conflict(&self, _: &Path, _: &Path) -> (ops::Choice, bool) {
+        (ops::Choice::Cancel, false)
+    }
+    fn cancelled(&self) -> bool {
+        false
+    }
+}
+
+/// Can we write into this folder (access(W_OK))? Decides whether New Folder needs the administrator route.
+#[tauri::command]
+fn can_write(path: String) -> bool {
+    std::ffi::CString::new(path).map(|c| unsafe { libc::access(c.as_ptr(), libc::W_OK) } == 0).unwrap_or(false)
+}
+
+/// Quick admin requests (rename, new folder/file): returns the resulting path.
+#[tauri::command]
+async fn admin_run(req: admin::Request) -> R<Option<String>> {
+    blocking(move || {
+        let (out, result) = admin::run(&req, &NoAsk)?;
+        match out.errors.into_iter().next() {
+            Some(e) => Err(e),
+            None => Ok(result),
+        }
+    })
+    .await?
+}
+
+fn default_app(path: &Path) -> R<desktop::App> {
+    let apps = desktop::all_apps();
+    let mime = desktop::mime_of(path);
+    let id = desktop::apps_for_mime(&mime, &apps, &desktop::load_mimeapps()).into_iter().next().ok_or(format!("no app for {mime}"))?;
+    apps.get(&id).cloned().ok_or(format!("{id} not found"))
+}
+
+/// Run the file's default app as root (pkexec env …). Apps that refuse root (Kate, VS Code…) need
+/// Edit as Administrator instead.
+#[tauri::command]
+async fn open_as_admin(path: String) -> R<()> {
+    blocking(move || {
+        let a = default_app(Path::new(&path))?;
+        let argv = desktop::expand_exec(&a, &[path.clone()], jobs::to_uri).into_iter().next().ok_or("empty Exec")?;
+        desktop::spawn_detached(&admin::open_argv(&argv), Path::new("/"))
+    })
+    .await?
+}
+
+/// Edit a copy with your normal app; every save is written back as root (password asked each time).
+#[tauri::command]
+async fn edit_as_admin(path: String, app: AppHandle) -> R<()> {
+    let term = term_pref(&app);
+    blocking(move || {
+        let orig = PathBuf::from(&path);
+        let copy = admin::edit_copy_path(&orig);
+        std::fs::create_dir_all(copy.parent().unwrap()).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&copy);
+        if std::fs::copy(&orig, &copy).is_err() {
+            // not even readable by us: let root hand us a copy
+            let (out, _) = admin::run(&admin::Request::Read { src: path.clone(), dst: copy.to_string_lossy().into_owned() }, &NoAsk)?;
+            if let Some(e) = out.errors.into_iter().next() {
+                return Err(e);
+            }
+        }
+        let a = default_app(&orig)?;
+        desktop::launch(&a, &[copy.to_string_lossy().into_owned()], &term)?;
+        let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+        let mut seen = mtime(&copy);
+        let started = std::time::Instant::now();
+        std::thread::spawn(move || {
+            // NOTE: polls the copy's mtime every second for up to a day; inotify if this ever matters
+            while started.elapsed() < Duration::from_secs(86400) {
+                std::thread::sleep(Duration::from_secs(1));
+                let Some(now) = mtime(&copy) else { break }; // copy deleted: done
+                if Some(now) == seen {
+                    continue;
+                }
+                seen = Some(now);
+                let req = admin::Request::Write { src: copy.to_string_lossy().into_owned(), dst: path.clone() };
+                let err = match admin::run(&req, &NoAsk) {
+                    Ok((out, _)) => out.errors.into_iter().next(),
+                    Err(e) => Some(e),
+                };
+                let _ = app.emit("admin-saved", (path.clone(), err));
+            }
+        });
+        Ok(())
+    })
+    .await?
+}
+
 // ---------- properties ----------
 
 #[tauri::command]
@@ -792,6 +888,10 @@ fn isolated() -> bool {
 }
 
 fn main() {
+    // `pkexec whale-cabinet --admin-helper`: do one file operation as root and exit, never start the UI
+    if std::env::args().nth(1).as_deref() == Some("--admin-helper") {
+        std::process::exit(admin::helper_main());
+    }
     let mut builder = tauri::Builder::default();
     if !isolated() {
         // Must be first: a second `whale-cabinet …` hands its arguments to this process and exits.
@@ -852,7 +952,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

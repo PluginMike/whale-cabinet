@@ -179,6 +179,7 @@ export function fileMenu(p: Pane): Item[] {
     { label: "Colour", sub: () => colorItems(es) },
     { label: "Tags", sub: () => tagItems(es) },
     "-",
+    ...hooks.menuExtra.flatMap((f) => f(p, es)),
     { label: "Move to Trash", kb: "Del", act: () => ops.trashSel(p) },
     { label: "Delete", kb: "Shift+Del", danger: true, act: () => ops.deleteSel(p) },
     "-",

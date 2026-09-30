@@ -159,6 +159,21 @@ pub fn op_transfer(app: AppHandle, window: tauri::Window, sources: Vec<String>, 
     })
 }
 
+/// A file operation that needs root: runs through pkexec + the helper, with the usual progress and conflicts.
+#[tauri::command]
+pub fn op_admin(app: AppHandle, window: tauri::Window, req: crate::admin::Request) -> u64 {
+    use crate::admin::Request as Q;
+    let (title, items) = match &req {
+        Q::Transfer { pairs, mv } => (format!("{} {} as administrator", if *mv { "Moving" } else { "Copying" }, count(pairs.len(), "item")), false),
+        Q::Delete { paths } => (format!("Deleting {} as administrator", count(paths.len(), "item")), true),
+        _ => ("Working as administrator".into(), true),
+    };
+    spawn(&app, &window, title, items, move |rep| match crate::admin::run(&req, rep) {
+        Ok((out, _)) => (out, None),
+        Err(e) => (ops::Outcome { errors: vec![e], ..Default::default() }, None),
+    })
+}
+
 #[tauri::command]
 pub fn op_delete(app: AppHandle, window: tauri::Window, items: Vec<String>) -> u64 {
     spawn(&app, &window, format!("Deleting {}", count(items.len(), "item")), true, move |rep| (ops::delete(&paths(&items), rep), None))

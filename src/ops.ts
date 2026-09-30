@@ -13,6 +13,28 @@ type Progress = { bytes_done: number; bytes_total: number; items_done: number; i
 type OpEvent = { id: number; title: string; state: "progress" | "conflict" | "done"; progress?: Progress; conflict?: any; errors: string[]; undo?: Undo; cancelled: boolean };
 
 let lastUndo: Undo | null = null;
+
+// ---------- administrator retry ----------
+type AdminReq = { op: "transfer"; pairs: [string, string][]; mv: boolean } | { op: "delete"; paths: string[]; trash?: boolean };
+const requests = new Map<number, AdminReq>(); // job id → what it tried, for "Retry as administrator"
+export const isPerm = (e: string) => /permission denied|operation not permitted|os error 13\b|os error 1\b|read-only file system/i.test(e);
+async function retryAsAdmin(id: number, done: Undo | undefined) {
+  const req = requests.get(id); if (!req) return;
+  requests.delete(id);
+  if (req.op === "transfer") {
+    // leave out what already went through
+    const moved = new Set(done?.kind === "move" ? done.pairs.map((x) => x[1]) : []);
+    const copied = new Set(done?.kind === "trash" ? done.paths : []);
+    const pairs = req.pairs.filter(([s, d]) => !moved.has(s) && !copied.has(d));
+    if (pairs.length) invoke("op_admin", { req: { op: "transfer", pairs, mv: req.mv } });
+  } else {
+    const trashed = new Set(done?.kind === "restore" ? done.paths : []);
+    const paths = req.paths.filter((x) => !trashed.has(x));
+    if (!paths.length) return;
+    if (req.trash && !(await confirmBox(`The trash can't be used there. Delete ${paths.length === 1 ? `"${shown(baseName(paths[0]))}"` : `${paths.length} items`} permanently as administrator?`, "Delete", true))) return;
+    invoke("op_admin", { req: { op: "delete", paths } });
+  }
+}
 const selectAfter = new Map<number, Pane>(); // job id → pane whose results to select
 
 // ---------- progress panel ----------
@@ -62,11 +84,18 @@ getCurrentWebviewWindow().listen<OpEvent>("op", ({ payload: ev }) => {
       el.classList.add("err");
       el.querySelector(".jt button")!.textContent = "Dismiss";
       (el.querySelector(".jt button") as HTMLButtonElement).onclick = () => dropCard(ev.id);
+      if (requests.has(ev.id) && ev.errors.some(isPerm)) {
+        const b = document.createElement("button");
+        b.textContent = "Retry as administrator";
+        b.onclick = () => { dropCard(ev.id); retryAsAdmin(ev.id, ev.undo); };
+        el.querySelector(".jt")!.insertBefore(b, el.querySelector(".jt button"));
+      }
       el.querySelector(".sub")!.textContent = `${ev.errors.length} problem${ev.errors.length > 1 ? "s" : ""}: ${ev.errors.slice(0, 3).join(" · ")}`;
       (el.querySelector(".sub") as HTMLElement).title = ev.errors.join("\n");
       panel.append(el); panel.hidden = false;
       flash(ev.errors[0]);
     } else {
+      requests.delete(ev.id);
       dropCard(ev.id, ev.cancelled ? 0 : 600);
       if (ev.cancelled) flash("Cancelled");
     }
@@ -93,18 +122,19 @@ export async function paste(into = targetDir()) {
 }
 export async function transfer(sources: string[], dest: string, mv: boolean, names?: string[]) {
   const id = await invoke<number>("op_transfer", { sources, dest, mv, names: names ?? null });
+  requests.set(id, { op: "transfer", pairs: sources.map((s, i) => [s, joinPath(dest, names?.[i] ?? baseName(s))]), mv });
   const p = allPanes().find((x) => x.loc === dest); if (p) selectAfter.set(id, p);
 }
 export async function trashSel(p = pane()) {
   const paths = selPaths(p); if (!paths.length) return;
   if (p.loc === "trash:/") return purgeSel(p);
-  invoke("op_trash", { items: paths });
+  requests.set(await invoke<number>("op_trash", { items: paths }), { op: "delete", paths, trash: true });
 }
 export async function deleteSel(p = pane()) {
   if (p.loc === "trash:/") return purgeSel(p);
   const paths = selPaths(p); if (!paths.length) return;
   const what = paths.length === 1 ? `"${shown(baseName(paths[0]))}"` : `${paths.length} items`;
-  if (await confirmBox(`Permanently delete ${what}? This can't be undone.`, "Delete", true)) invoke("op_delete", { items: paths });
+  if (await confirmBox(`Permanently delete ${what}? This can't be undone.`, "Delete", true)) requests.set(await invoke<number>("op_delete", { items: paths }), { op: "delete", paths });
 }
 export async function rename(p = pane()) {
   const e = p.entry(p.focus) ?? p.selected()[0];
@@ -117,11 +147,19 @@ export async function rename(p = pane()) {
     lastUndo = undo;
     await p.load(parentOf(to));
     p.selectPaths([to]);
-  } catch (err) { flash(String(err)); }
+  } catch (err) {
+    if (!isPerm(String(err)) || !(await confirmBox(`You can't rename "${shown(e.name)}" here. Rename it as administrator?`, "Rename as administrator"))) { flash(String(err)); return; }
+    try { const to = await invoke<string>("admin_run", { req: { op: "rename", path: e.path, name } }); await p.load(parentOf(to)); p.selectPaths([to]); } catch (e2) { flash(String(e2)); }
+  }
 }
 export async function makeNew(folder: boolean, p = pane()) {
   const dir = targetDir(p); if (!dir) return;
   const name = await invoke<string>("unique_name", { dir, name: folder ? "New Folder" : "New File" });
+  if (!(await invoke<boolean>("can_write", { path: dir }))) {
+    if (!(await confirmBox(`You can't create items in ${shown(baseName(dir) || "/")}. Create "${name}" as administrator?`, "Create as administrator"))) return;
+    try { const path = await invoke<string>("admin_run", { req: { op: "create", dir, name, folder } }); await p.load(dir); p.selectPaths([path]); } catch (e) { flash(String(e)); }
+    return;
+  }
   try {
     const path = await invoke<string>("make_item", { dir, name, folder });
     lastUndo = { kind: "trash", paths: [path] };

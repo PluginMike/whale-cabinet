@@ -37,11 +37,13 @@ export const hooks: {
   chrome: ((p: Pane) => void)[];
   /** extra folders to watch beyond what panes show (trash, .git dirs…) */
   extraWatch: (() => string[])[];
+  /** extra context-menu entries for a selection (menu.ts Item[]), added before Properties */
+  menuExtra: ((p: Pane, es: Entry[]) => any[])[];
   /** per location scheme: group headers, row height, opening sort */
   group: Record<string, (e: Entry) => string>;
   rowScale: Record<string, number>;
   defaultSort: Record<string, string>;
-} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {} };
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {}, menuExtra: [] };
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
