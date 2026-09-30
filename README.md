@@ -277,6 +277,11 @@ selects the extra copies keeping the newest, the oldest or the one in a folder y
   syntax-highlighted text/code, and rendered Markdown (tables, task lists, code blocks, relative images and links;
   "View source" toggles). Markdown is sanitized before it's shown.
 - Folders show their item count; "Calculate total size" walks the whole tree on demand.
+- **The viewer** (Space, or right-click → *Preview*) shows pictures (click: actual size / fit), video, audio,
+  every page of a PDF (rendered by poppler as you scroll), highlighted code and rendered Markdown; ←/→ flips
+  through the folder, *Open with app* hands it over. Settings → "Opening pictures, PDFs, videos, text and
+  Markdown" makes Enter / double-click open those in the viewer instead of their app.
+- Code and text previews have a *Copy* button, and so does every code block in rendered Markdown (on hover).
 
 ### Tabs, split view, terminal, search, Places, devices
 

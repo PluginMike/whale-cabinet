@@ -108,6 +108,11 @@ export function renderMarkdown(src: string, file: string) {
     if (lang && hljs.getLanguage(LANG[lang] ?? lang)) c.innerHTML = hljs.highlight(c.textContent ?? "", { language: LANG[lang] ?? lang }).value;
     else if ((c.textContent ?? "").length < 5000) c.innerHTML = hljs.highlightAuto(c.textContent ?? "").value;
   });
+  div.querySelectorAll<HTMLElement>("pre").forEach((pre) => {
+    const b = copyButton(() => pre.querySelector("code")?.textContent ?? pre.textContent ?? "");
+    b.classList.add("pre-copy");
+    pre.append(b);
+  });
   div.querySelectorAll("li input[type=checkbox]").forEach((i) => i.closest("li")?.classList.add("task-list-item"));
   div.addEventListener("click", (ev) => {
     const a = (ev.target as HTMLElement).closest("a"); if (!a) return;
@@ -117,6 +122,53 @@ export function renderMarkdown(src: string, file: string) {
     invoke("open_path", { path: /^[a-z]+:/i.test(href) && !href.startsWith("file:") ? href : resolveRel(base, href) }).catch((e) => flash(String(e)));
   });
   return div;
+}
+
+/** A "Copy" button that puts `text()` on the clipboard. */
+export function copyButton(text: () => string, label = "Copy") {
+  const b = document.createElement("button");
+  b.textContent = label;
+  b.title = "Copy to the clipboard";
+  b.onclick = async (ev) => {
+    ev.stopPropagation();
+    try { await invoke("copy_text", { text: text() }); b.textContent = "Copied ✓"; } catch (err) { flash(String(err)); }
+    setTimeout(() => (b.textContent = label), 1400);
+  };
+  return b;
+}
+const tools = (...bs: HTMLElement[]) => { const t = document.createElement("div"); t.className = "pv-tools"; t.append(...bs); return t; };
+
+// WebKit can't show these itself (they still get thumbnails where a thumbnailer can)
+const NO_WEB = new Set(["heic", "heif", "raw", "cr2", "nef", "tif", "tiff"]);
+const TEXTY = new Set(["pdf", "md", "markdown", "txt", "log", "csv", "conf", "ini", "desktop"]);
+/** Can the viewer show this one properly? (decides "open in the viewer" for Enter / double-click) */
+export const previewable = (e: Entry) => !e.dir && !e.special && !e.broken && !e.trashId &&
+  (!!e.preview || (["img", "vid", "aud", "code"].includes(kindOf(e)) && !NO_WEB.has(ext(e))) || TEXTY.has(ext(e)));
+
+/** Every page of a PDF, each rendered (poppler) as it scrolls near. */
+async function pdfPages(e: Entry) {
+  const n = await invoke<number>("pdf_pages", { path: e.path }).catch(() => 0);
+  if (!n) return null;
+  const box = document.createElement("div");
+  box.className = "pdf-pages";
+  const width = Math.round(Math.min(1400, innerWidth * 0.9) * devicePixelRatio);
+  const io = new IntersectionObserver((xs) => {
+    for (const x of xs) {
+      if (!x.isIntersecting) continue;
+      const img = x.target as HTMLImageElement;
+      io.unobserve(img);
+      invoke<string>("pdf_page", { path: e.path, page: +img.dataset.page!, width })
+        .then((p) => { img.onload = () => (img.style.aspectRatio = ""); img.src = assetUrl(p); })
+        .catch(() => (img.alt = `Couldn't render page ${img.dataset.page}`));
+    }
+  }, { rootMargin: "1500px 0px" });
+  for (let i = 1; i <= n; i++) {
+    const img = document.createElement("img");
+    img.className = "pdf-page"; img.dataset.page = String(i); img.draggable = false; img.title = `Page ${i} of ${n}`;
+    box.append(img);
+    io.observe(img);
+  }
+  return box;
 }
 
 type Big = { el: HTMLElement; tools?: HTMLElement };
@@ -130,6 +182,8 @@ async function previewOf(e: Entry, big: boolean): Promise<Big | null> {
   if (k === "vid") { const v = document.createElement("video"); v.src = url; v.controls = true; v.preload = "metadata"; return { el: v }; }
   if (k === "aud") { const a = document.createElement("audio"); a.src = url; a.controls = true; a.preload = "metadata"; return { el: a }; }
   if (x === "pdf") {
+    const pages = big ? await pdfPages(e) : null;
+    if (pages) return { el: pages };
     const p = await invoke<string>("thumbnail", { path: e.path, size: big ? 1400 : 600 }).catch(() => "");
     if (!p) return null;
     const i = new Image(); i.src = assetUrl(p); return { el: i };
@@ -142,19 +196,18 @@ async function previewOf(e: Entry, big: boolean): Promise<Big | null> {
     const wrap = document.createElement("div");
     const rendered = renderMarkdown(t.text, e.path), source = highlight(t.text, "md");
     source.hidden = true;
-    const tools = document.createElement("div");
-    tools.className = "pv-tools";
-    tools.innerHTML = `<button data-src>View source</button>`;
-    tools.querySelector("button")!.onclick = (ev) => {
+    const toggle = document.createElement("button");
+    toggle.textContent = "View source";
+    toggle.onclick = () => {
       source.hidden = !source.hidden; rendered.hidden = !source.hidden;
-      (ev.target as HTMLElement).textContent = source.hidden ? "View source" : "Rendered";
+      toggle.textContent = source.hidden ? "View source" : "Rendered";
     };
-    wrap.append(tools, rendered, source);
+    wrap.append(tools(toggle, copyButton(() => t.text, t.truncated ? "Copy (what's shown)" : "Copy")), rendered, source);
     wrap.insertAdjacentHTML("beforeend", note);
     return { el: wrap };
   }
   const wrap = document.createElement("div");
-  wrap.append(highlight(t.text, x));
+  wrap.append(tools(copyButton(() => t.text, t.truncated ? "Copy (what's shown)" : "Copy")), highlight(t.text, x));
   wrap.insertAdjacentHTML("beforeend", note);
   return { el: wrap };
 }
@@ -205,15 +258,20 @@ hooks.info.push((el, picked, p) => {
 // ---------- Quick Look ----------
 const ql = $("quicklook");
 let qlToken = 0;
-async function showQL() {
-  const p = pane(), e = p.entry(p.focus) ?? p.selected()[0];
+async function showQL(which?: Entry) {
+  const p = pane(), e = which ?? p.entry(p.focus) ?? p.selected()[0];
   if (!e) { closeQL(); return; }
   const my = ++qlToken;
   ql.hidden = false;
-  ql.innerHTML = `<div class="ql-head"><span>${esc(shown(e.name))}</span><em>${esc(typeName(e))}${e.dir ? "" : ` · ${fmtSize(e.size)}`} · ←/→ browse · Esc close</em></div><div class="ql-body"></div>`;
+  ql.innerHTML = `<div class="ql-head"><span>${esc(shown(e.name))}</span><em>${esc(typeName(e))}${e.dir || !e.size ? "" : ` · ${fmtSize(e.size)}`} · ←/→ browse · Esc close</em>` +
+    `${e.dir ? "" : `<button class="ql-app" title="Open it with its default app">Open with app</button>`}<button class="ql-x" title="Close (Esc)">✕</button></div><div class="ql-body"></div>`;
+  ql.querySelector<HTMLElement>(".ql-x")!.onclick = closeQL;
+  const app = ql.querySelector<HTMLElement>(".ql-app");
+  if (app) app.onclick = () => { closeQL(); hooks.open?.(e, p); };
   const body = ql.querySelector<HTMLElement>(".ql-body")!;
   const pv = e.dir ? null : await previewOf(e, true);
   if (my !== qlToken) return;
+  if (pv?.el instanceof HTMLImageElement) { pv.el.classList.add("zoomable"); pv.el.title = "Click: actual size / fit"; pv.el.onclick = () => pv.el.classList.toggle("actual"); }
   if (pv) body.replaceChildren(pv.el);
   else body.innerHTML = `<div class="glyph" style="transform:scale(1.6)">${glyph(e)}</div>`;
   body.querySelector("video")?.play().catch(() => {});
@@ -233,7 +291,9 @@ window.addEventListener("keydown", (ev) => {
     showQL();
   }
 });
-ql.addEventListener("dblclick", closeQL);
+ql.addEventListener("dblclick", (ev) => { if (!(ev.target as HTMLElement).closest(".zoomable, .pv-tools, button, .md, pre")) closeQL(); });
+/** Open the viewer on this entry if it can show it properly. */
+hooks.preview = (e) => { if (!previewable(e)) return false; showQL(e); return true; };
 hooks.keys.push((ev) => {
   // the Quick Look key handler (registered after the app's) would see this same Space and close it again
   if (ev.key === " " && !ev.ctrlKey && !ev.altKey) { ev.stopImmediatePropagation(); showQL(); return true; }

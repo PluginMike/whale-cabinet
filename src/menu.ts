@@ -167,8 +167,9 @@ export function fileMenu(p: Pane): Item[] {
   const files = es.filter((e) => !e.dir);
   const archives = files.filter((e) => ARCHIVE.test(e.name));
   const list: Item[] = [
-    { label: "Open", kb: "Enter", act: () => (one?.dir ? p.navigate(one.path) : invoke("open_default", { paths: files.map((e) => e.path) }).catch((e) => flash(String(e)))) },
+    { label: "Open", kb: "Enter", act: () => (one ? host.open(one, p) : invoke("open_default", { paths: files.map((e) => e.path) }).catch((e) => flash(String(e)))) },
   ];
+  if (one && !one.dir) list.push({ label: "Preview", kb: "Space", act: () => { if (!hooks.preview?.(one)) flash("No preview for this kind of file"); } });
   if ((files.length && !dirs.length) || one) list.push({ label: "Open With", sub: () => openWithItems(paths) });
   if (dirs.length) list.push({ label: dirs.length > 1 ? "Open in New Tabs" : "Open in New Tab", act: () => dirs.forEach((d) => newTab(d.path, false)) });
   if (one?.dir) list.push({ label: "Add to Places", act: () => hooks.addPlace?.(one.path) });

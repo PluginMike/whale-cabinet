@@ -3,7 +3,7 @@
 // A new plugin asks for consent before it ever runs.
 import { listen } from "@tauri-apps/api/event";
 import { $, Entry, invoke, esc, ext, parentOf, fmtSize, fmtDate, shown } from "./util";
-import { hooks, pane, allPanes, flash, newTab, scheme, dl } from "./app";
+import { hooks, pane, allPanes, flash, newTab, scheme, dl, host } from "./app";
 import { Pane } from "./pane";
 import { Item } from "./menu";
 import { startDrag, confirmBox } from "./ops";
@@ -64,7 +64,8 @@ function register(p: Plugin) {
     if (!es.length) return [...(p.upload ? [{ label: `Paste (upload to ${p.title})`, kb: "Ctrl+V", act: () => paste(p, pn.loc) }, "-"] : []), { label: "Reload", kb: "F5", act: () => pn.reload() }];
     const files = es.filter((e) => !e.dir);
     return [
-      { label: "Open", kb: "Enter", act: () => (es.length === 1 && es[0].dir ? pn.navigate(es[0].path) : openItems(files)) },
+      { label: "Open", kb: "Enter", act: () => (es.length === 1 ? host.open(es[0], pn) : openItems(files)) },
+      ...(es.length === 1 && !es[0].dir ? [{ label: "Preview", kb: "Space", act: () => hooks.preview?.(es[0]) }, { label: "Open with App", act: () => openItems(es) }] : []),
       ...(es.length === 1 && es[0].dir ? [{ label: "Open in New Tab", act: () => newTab(es[0].path, false) }] : []),
       "-",
       { label: "Copy", kb: "Ctrl+C", off: !files.length, act: () => copyItems(files) },

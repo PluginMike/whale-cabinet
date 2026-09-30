@@ -26,6 +26,7 @@ pub fn defaults() -> Map<String, Value> {
         "infoPanel": true,
         "zoom": 1.0,               // item size (1.0 = the default "large" cabinet)
         "folderDblClick": "open",  // open (Windows style) | expand (pull out inline)
+        "openFiles": "app",        // app | viewer — pictures, PDFs, video, text/Markdown open in the built-in viewer
         "infoWidth": 420,          // info panel width, px (drag its edge)
         "terminal": "",            // empty = auto-detect
         "restoreSession": "ask"    // ask | always | never — reopen last windows and tabs on a plain launch

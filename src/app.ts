@@ -28,7 +28,10 @@ export const hooks: {
   dropMenu?: (x: number, y: number, pick: (copy: boolean) => void) => void;
   addPlace?: (path: string) => void;
   locTitle?: Record<string, (loc: string) => string>;
+  /** open with its app (plugins: download first) */
   open?: (e: Entry, p: Pane) => void;
+  /** show it in the built-in viewer; false when the viewer can't show it */
+  preview?: (e: Entry) => boolean;
   onNavigate?: (p: Pane) => void;
   keys: ((ev: KeyboardEvent, p: Pane) => boolean)[];
   /** git state letter for an entry (badges). */
@@ -87,6 +90,7 @@ export const host: Host = {
   changed(p) { if (!tab()) return; if (p === pane()) chrome(); renderTabbar(); },
   open(e, p) {
     if (e.dir) p.navigate(e.path);
+    else if (settings.openFiles === "viewer" && hooks.preview?.(e)) return;
     else if (hooks.open) hooks.open(e, p);
     else invoke("open_path", { path: e.path }).catch((err) => flash(String(err)));
   },

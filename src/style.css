@@ -593,3 +593,13 @@ body.dragging #shelf.empty { display: block; }
 .plugin-set { padding: 6px 0; border-top: 1px solid var(--divider); }
 .plugin-set:first-of-type { border-top: 0; }
 .toast.plugin-ask { max-width: min(760px, 92vw); }
+
+/* viewer: toolbar, PDF pages, zoom, copy buttons */
+#quicklook .ql-head button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 3px 12px; cursor: pointer; font-weight: 400; font-size: .85em; }
+#quicklook .ql-body img.zoomable { cursor: zoom-in; }
+#quicklook .ql-body img.zoomable.actual { max-width: none; max-height: none; cursor: zoom-out; }
+.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(1400px, 90vw); padding-bottom: 24px; }
+#quicklook .ql-body .pdf-pages img.pdf-page { width: 100%; max-height: none; aspect-ratio: 1 / 1.414; background: #fff; border-radius: 3px; box-shadow: 0 6px 24px -10px rgb(0 0 0 / .6); }
+.md pre { position: relative; }
+.pre-copy { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity .15s; border: 1px solid var(--divider); background: var(--front); color: var(--on-body); border-radius: calc(var(--radius) * .4); padding: 2px 8px; font-size: .8em; cursor: pointer; font-family: inherit; }
+.md pre:hover .pre-copy, .pre-copy:focus { opacity: 1; }

@@ -174,6 +174,40 @@ pub fn dir_stats(p: &Path) -> DirStats {
     s
 }
 
+// ---------- PDF pages for the viewer (poppler) ----------
+
+/// Number of pages ("Pages:" from pdfinfo).
+pub fn pdf_pages(p: &Path) -> Result<u32, String> {
+    let o = Command::new("pdfinfo").arg(p).output().map_err(|e| format!("pdfinfo: {e} (install poppler)"))?;
+    let text = String::from_utf8_lossy(&o.stdout);
+    text.lines().find_map(|l| l.strip_prefix("Pages:")).and_then(|n| n.trim().parse().ok()).ok_or_else(|| String::from_utf8_lossy(&o.stderr).trim().to_owned())
+}
+
+/// Page `page` (1-based) rendered `width` px wide, cached under ~/.cache/whale-cabinet/pdf/ (keyed by file,
+/// mtime, page and width, so an edited PDF renders fresh).
+pub fn pdf_page(root: &Path, p: &Path, page: u32, width: u32) -> Result<PathBuf, String> {
+    let m = fs::metadata(p).map_err(|e| e.to_string())?;
+    let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs());
+    let dir = root.join("whale-cabinet/pdf");
+    let out = dir.join(format!("{}-{page}-{width}.png", md5_hex(&format!("{}\0{mtime}", p.display()))));
+    if out.exists() {
+        return Ok(out);
+    }
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!("{}.part", tempfile_path().file_name().unwrap().to_string_lossy()));
+    let (pg, w) = (page.to_string(), width.to_string());
+    let o = Command::new("pdftoppm").args(["-png", "-singlefile", "-f", &pg, "-l", &pg, "-scale-to-x", &w, "-scale-to-y", "-1"]).arg(p).arg(&tmp)
+        .output().map_err(|e| format!("pdftoppm: {e} (install poppler)"))?;
+    // pdftoppm appends ".png" to the output root with -singlefile
+    let made = PathBuf::from(format!("{}.png", tmp.display()));
+    if !o.status.success() || !made.exists() {
+        let _ = fs::remove_file(&made);
+        return Err(String::from_utf8_lossy(&o.stderr).trim().to_owned());
+    }
+    fs::rename(&made, &out).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,6 +216,25 @@ mod tests {
     fn spec_md5_example() {
         // From the freedesktop thumbnail spec.
         assert_eq!(md5_hex("file:///home/jens/photos/me.png"), "c6ee772d9e49320e97ec29a7eb5b1697");
+    }
+
+    #[test]
+    fn pdf_pages_render_and_cache() {
+        if crate::desktop::which("pdftoppm").is_none() || crate::desktop::which("pdfinfo").is_none() {
+            return; // poppler not installed
+        }
+        let t = tempfile::tempdir().unwrap();
+        let pdf = t.path().join("two.pdf");
+        // two empty 200×100 pt pages (no xref: poppler rebuilds it)
+        fs::write(&pdf, "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj\n\
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\n4 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\n\
+trailer<</Root 1 0 R>>\n%%EOF\n").unwrap();
+        assert_eq!(pdf_pages(&pdf).unwrap(), 2);
+        let root = t.path().join("cache");
+        let p2 = pdf_page(&root, &pdf, 2, 400).unwrap();
+        assert_eq!(image::image_dimensions(&p2).unwrap(), (400, 200));
+        assert_eq!(pdf_page(&root, &pdf, 2, 400).unwrap(), p2, "cached");
+        assert!(pdf_page(&root, &pdf, 9, 400).is_err(), "no page 9");
     }
 
     #[test]
