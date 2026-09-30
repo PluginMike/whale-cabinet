@@ -20,6 +20,7 @@ mod settings;
 mod tags;
 mod term;
 mod theme;
+mod usage;
 mod zoxide;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -551,6 +552,76 @@ fn shelf_remove(paths: Option<Vec<String>>, app: AppHandle, s: State<Shelf>) {
     shelf_changed(&app, &g);
 }
 
+// ---------- disk usage ----------
+
+#[derive(Serialize, Clone)]
+struct UsageTick {
+    id: u32,
+    files: u64,
+    bytes: u64,
+    done: bool,
+    error: Option<String>,
+}
+
+/// Scan `root` in the background; progress and completion go to the asking window as "usage".
+#[tauri::command]
+fn usage_scan(id: u32, root: String, window: tauri::Window, app: AppHandle, s: State<search::Searches>) {
+    let cancel = s.register(id);
+    let label = window.label().to_owned();
+    std::thread::spawn(move || {
+        let send = |files, bytes, done, error: Option<String>| {
+            let _ = app.emit_to(label.as_str(), "usage", UsageTick { id, files, bytes, done, error });
+        };
+        let mut last = std::time::Instant::now();
+        let tree = usage::scan(Path::new(&root), &cancel, &mut |f, b| {
+            if last.elapsed() > Duration::from_millis(200) {
+                last = std::time::Instant::now();
+                send(f, b, false, None);
+            }
+        });
+        match tree {
+            Some(t) => {
+                let (f, b) = (t.files, t.size);
+                app.state::<usage::Scans>().lock().unwrap().insert(id, (PathBuf::from(&root), t));
+                send(f, b, true, None);
+            }
+            None if cancel.load(std::sync::atomic::Ordering::Relaxed) => {}
+            None => send(0, 0, true, Some(format!("can't read {root}"))),
+        }
+    });
+}
+
+/// A pruned view of a finished scan at `path` (inside its root).
+#[tauri::command]
+fn usage_view(id: u32, path: String, depth: u32, s: State<usage::Scans>) -> R<usage::View> {
+    let g = s.lock().unwrap();
+    let (root, tree) = g.get(&id).ok_or("scan not found")?;
+    let p = Path::new(&path);
+    let rel = usage::rel(root, p).ok_or("outside the scanned folder")?;
+    let node = tree.find(&rel).ok_or("not in the scan (deleted?)")?;
+    Ok(node.view(p, depth, 0.004, 60))
+}
+
+/// Forget a finished scan, or take trashed paths out of it.
+#[tauri::command]
+fn usage_drop(id: u32, paths: Option<Vec<String>>, s: State<usage::Scans>) {
+    let mut g = s.lock().unwrap();
+    match paths {
+        None => {
+            g.remove(&id);
+        }
+        Some(ps) => {
+            if let Some((root, tree)) = g.get_mut(&id) {
+                for p in &ps {
+                    if let Some(rel) = usage::rel(root, Path::new(p)) {
+                        tree.remove(&rel);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ---------- zoxide ----------
 
 #[tauri::command]
@@ -1065,6 +1136,7 @@ fn main() {
         .manage(term::Terms::default())
         .manage(search::Searches::default())
         .manage(std::sync::Arc::new(fuzzy::Fuzzy::default()))
+        .manage(usage::Scans::default())
         .setup(|app| {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
@@ -1099,7 +1171,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

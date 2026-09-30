@@ -179,6 +179,13 @@ Saved connections live in `user-places.xbel`, so Dolphin sees them too; ⏏ disc
   Administrator* opens a private copy in your normal editor; each save is written back to the original (keeping its
   owner and permissions), asking for the password each time. Use the latter for editors that refuse to run as root.
 
+### Disk usage
+
+Tools → *Disk usage…* (or right-click a folder → *Disk Usage…*) scans the folder once, counting what's really
+allocated on disk like `du` (hard links once, other filesystems not entered), and shows a sunburst and a sorted
+list. Click a slice or row to go in, the centre or Backspace to go up; right-click to open it, show it, or move it
+to the trash (the map updates without rescanning).
+
 ### Duplicate files
 
 Sidebar → Tools → *Find duplicates…*: choose a folder and a minimum size. Files are compared by size, then the

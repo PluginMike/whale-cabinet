@@ -62,6 +62,7 @@ export const actions: Action[] = [
   { label: "Recent files", run: () => pane().navigate("recent:/") },
   { label: "Trash", run: () => pane().navigate("trash:/") },
   { label: "Find duplicates…", run: click("#tool-dupes") },
+  { label: "Disk usage of this folder…", run: () => import("./usage").then((m) => m.openUsage(pane().targetDir() || HOME)) },
   { label: "Connect to server…", run: () => import("./network").then((m) => m.connectDialog()) },
   { label: "Manage tags…", run: () => import("./tags").then((m) => m.manageTags()) },
   { label: "New tag for the selection…", run: () => import("./tags").then((m) => m.newTag(pane().selected().map((e) => e.path))), when: sel },
