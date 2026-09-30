@@ -75,10 +75,17 @@ async function show(path: string) {
 }
 const find = (p: string) => segs.get(p) ?? view?.kids.find((k) => k.path === p);
 
+/** The loading animation is built once; ticks only change its numbers (rebuilding it restarted the spin). */
 function scanning(files: number, bytes: number) {
-  svg.innerHTML = `<circle r="60" class="us-spin"></circle><text class="us-c1" y="-2">Scanning…</text><text class="us-c2" y="10">${files.toLocaleString()} files · ${fmtSize(bytes)}</text>`;
-  listEl.innerHTML = "";
-  el.querySelector(".us-total")!.textContent = "";
+  if (!svg.querySelector(".us-load")) {
+    svg.innerHTML = `<g class="us-load">
+      <circle r="88" class="l1"></circle><circle r="70" class="l2"></circle><circle r="52" class="l3"></circle><circle r="34" class="l4"></circle>
+      <circle r="25" class="us-centre"></circle>
+      <text class="us-c1" y="-2">Scanning…</text><text class="us-c2 us-n" y="9"></text></g>`;
+    listEl.innerHTML = "";
+    el.querySelector(".us-total")!.textContent = "";
+  }
+  svg.querySelector(".us-n")!.textContent = files ? `${files.toLocaleString()} files · ${fmtSize(bytes)}` : "";
 }
 
 export function openUsage(dir: string) {
@@ -86,6 +93,7 @@ export function openUsage(dir: string) {
   if (id) invoke("usage_drop", { id, paths: null });
   id = 1 + Math.floor(Math.random() * 2 ** 30);
   root = cur = dir; view = null; open = true;
+  svg.innerHTML = "";
   el.hidden = false;
   el.querySelector(".us-crumbs")!.innerHTML = `<button>${esc(shown(baseName(dir) || "/"))}</button>`;
   scanning(0, 0);

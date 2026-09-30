@@ -12,7 +12,7 @@ export type Item = "-" | {
 };
 
 const menu = document.getElementById("menu")!;
-let hl = -1, subEl: HTMLElement | null = null;
+let hl = -1, subEl: HTMLElement | null = null, subTimer = 0;
 
 function build(items: Item[], el: HTMLElement) {
   el.innerHTML = items.map((it, i) => it === "-" ? "<hr>" :
@@ -20,9 +20,16 @@ function build(items: Item[], el: HTMLElement) {
     (it.icon ? `<img src="${esc(it.icon)}" alt="">` : it.dot ? `<span class="dot" style="background:${esc(it.dot)}"></span>` : `<span class="ico"></span>`) +
     `<span>${esc(it.label)}</span>${it.kb ? `<span class="kb">${esc(it.kb)}</span>` : ""}</div>`).join("");
   el.onmousemove = (ev) => {
+    if (el !== menu) return;
+    // the submenu lives inside #menu: its rows aren't main-menu rows
+    if ((ev.target as HTMLElement).closest(".submenu")) { clearTimeout(subTimer); return; }
     const row = (ev.target as HTMLElement).closest<HTMLElement>(".mi"); if (!row) return;
-    const it = items[+row.dataset.i!] as Exclude<Item, "-">;
-    if (el === menu) { setHl(+row.dataset.i!); if (it.sub) openSub(row, it); else closeSub(); }
+    const i = +row.dataset.i!, it = items[i] as Exclude<Item, "-">;
+    if (i === hl) return;
+    setHl(i);
+    // wait a moment before switching submenus, so moving diagonally towards an open one doesn't close it
+    clearTimeout(subTimer);
+    subTimer = window.setTimeout(() => { if (hl !== i) return; if (it.sub) openSub(row, it); else closeSub(); }, subEl ? 220 : 60);
   };
   el.onclick = (ev) => {
     const row = (ev.target as HTMLElement).closest<HTMLElement>(".mi"); if (!row) return;
@@ -54,7 +61,7 @@ async function openSub(row: HTMLElement, it: Exclude<Item, "-">) {
   build(list, el);
   place();
 }
-function closeSub() { subEl?.remove(); subEl = null; }
+function closeSub() { clearTimeout(subTimer); subEl?.remove(); subEl = null; }
 export function closeMenu() { menu.hidden = true; closeSub(); menu.innerHTML = ""; pane()?.scroller.focus({ preventScroll: true }); }
 
 export function showMenu(x: number, y: number, list: Item[]) {

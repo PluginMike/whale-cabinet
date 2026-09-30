@@ -69,7 +69,6 @@ export class Pane {
     this.scroller.addEventListener("scroll", () => { this.render(); if (this.bandState) this.moveBand(); }, { passive: true });
     new ResizeObserver(() => { this.layout(); }).observe(this.scroller);
     this.scroller.addEventListener("mousedown", (ev) => this.mousedown(ev));
-    this.scroller.addEventListener("dblclick", (ev) => this.dblclick(ev));
     this.scroller.addEventListener("auxclick", (ev) => { if (ev.button === 1) { const i = this.rowAt(ev.target); if (i >= 0 && this.rows[i].e.dir) this.host.openInTab(this.rows[i].e.path); } });
     this.scroller.addEventListener("contextmenu", (ev) => {
       ev.preventDefault();
@@ -341,6 +340,9 @@ export class Pane {
     if (ev.button !== 0) return;
     this.scroller.focus({ preventScroll: true });
     const t = ev.target as HTMLElement, i = this.rowAt(t);
+    // Double-click from the second press's click count: the row re-renders between the clicks, and WebKit
+    // drops `dblclick` when the element that was pressed is gone.
+    if (ev.detail === 2 && !t.classList.contains("chev")) { this.dblclick(ev); return; }
     if (i >= 0 && t.classList.contains("chev")) { this.toggleExpand(this.rows[i].e.path); return; }
     if (i >= 0 && t.closest(".grab, .badge, .thumb")) {
       const p = this.rows[i].e.path;

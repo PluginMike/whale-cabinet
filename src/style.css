@@ -554,8 +554,15 @@ body.dragging #shelf.empty { display: block; }
 .us-centre { fill: var(--panel); cursor: pointer; }
 .us-c1, .us-c2 { text-anchor: middle; fill: var(--text); pointer-events: none; }
 .us-c1 { font-size: 7px; font-weight: 600; } .us-c2 { font-size: 6px; opacity: .75; }
-.us-spin { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 60 317; transform-origin: center; animation: us-spin 1s linear infinite; }
+/* loading: rings of the future sunburst, spinning at different speeds and directions */
+.us-load circle:not(.us-centre) { fill: none; transform-box: view-box; transform-origin: 0 0; stroke-linecap: round; opacity: .85; }
+.us-load .l1 { stroke: var(--t-blue); stroke-width: 14; stroke-dasharray: 90 40 30 60 120 50 60 103; animation: us-spin 7s linear infinite; }
+.us-load .l2 { stroke: var(--t-teal); stroke-width: 14; stroke-dasharray: 70 30 110 40 60 130; animation: us-spin 5s linear infinite reverse; }
+.us-load .l3 { stroke: var(--t-purple); stroke-width: 14; stroke-dasharray: 50 25 90 30 70 62; animation: us-spin 3.6s linear infinite; }
+.us-load .l4 { stroke: var(--t-pink); stroke-width: 14; stroke-dasharray: 40 20 60 20 73; animation: us-spin 2.4s linear infinite reverse; }
+.us-load .us-centre { animation: us-pulse 1.6s ease-in-out infinite; transform-box: view-box; transform-origin: 0 0; }
 @keyframes us-spin { to { rotate: 360deg; } }
+@keyframes us-pulse { 50% { scale: 1.06; } }
 .us-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .us-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) 90px 80px 40px; align-items: center; gap: 10px; padding: 6px 10px; border-radius: calc(var(--radius) * .5); cursor: pointer; transition: background-color .12s; }
 .us-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
@@ -576,3 +583,4 @@ body.dragging #shelf.empty { display: block; }
 .dv-head button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 3px 12px; cursor: pointer; }
 .dv-body { flex: 1; min-height: 0; overflow: auto; border-radius: calc(var(--radius) * .5); }
 .dv-body pre { margin: 0; padding: 10px 12px; background: var(--paper); color: var(--on-paper); font-size: .88em; line-height: 1.45; min-height: 100%; }
+.us-load .us-n { font-size: 4.6px; }
