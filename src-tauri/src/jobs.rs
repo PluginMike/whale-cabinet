@@ -57,6 +57,8 @@ type R<T> = Result<T, String>;
 /// Bridges ops::Report to Tauri events. `items` = progress is counted in items (trash/delete), not bytes.
 struct Rep {
     app: AppHandle,
+    /// Window that started the job: its progress and conflict questions go there only.
+    target: String,
     id: u64,
     title: String,
     cancel: Arc<AtomicBool>,
@@ -67,7 +69,7 @@ struct Rep {
 
 impl Rep {
     fn emit(&self, state: &str, p: Option<&Progress>, c: Option<&Conflict>) {
-        let _ = self.app.emit("op", OpEvent { id: self.id, title: &self.title, state, progress: p, conflict: c, errors: vec![], undo: None, cancelled: false });
+        let _ = self.app.emit_to(self.target.as_str(), "op", OpEvent { id: self.id, title: &self.title, state, progress: p, conflict: c, errors: vec![], undo: None, cancelled: false });
     }
 }
 
@@ -104,12 +106,12 @@ impl Report for Rep {
 }
 
 /// Run `work` on a thread; returns the job id immediately. `work` returns (outcome, undo record).
-fn spawn(app: &AppHandle, title: String, items: bool, work: impl FnOnce(&Rep) -> (ops::Outcome, Option<Undo>) + Send + 'static) -> u64 {
+fn spawn(app: &AppHandle, target: &tauri::Window, title: String, items: bool, work: impl FnOnce(&Rep) -> (ops::Outcome, Option<Undo>) + Send + 'static) -> u64 {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
     let cancel = Arc::new(AtomicBool::new(false));
     let (tx, rx) = channel();
     app.state::<Jobs>().0.lock().unwrap().insert(id, (cancel.clone(), tx));
-    let rep = Rep { app: app.clone(), id, title, cancel, rx: Mutex::new(rx), items, last: Mutex::new((Instant::now(), Progress::default())) };
+    let rep = Rep { app: app.clone(), target: target.label().to_owned(), id, title, cancel, rx: Mutex::new(rx), items, last: Mutex::new((Instant::now(), Progress::default())) };
     std::thread::spawn(move || {
         let (out, undo) = work(&rep);
         rep.app.state::<Jobs>().0.lock().unwrap().remove(&id);
@@ -118,7 +120,7 @@ fn spawn(app: &AppHandle, title: String, items: bool, work: impl FnOnce(&Rep) ->
             Undo::Trash { paths } | Undo::Restore { paths, .. } => !paths.is_empty(),
             Undo::Move { pairs } => !pairs.is_empty(),
         });
-        let _ = rep.app.emit("op", OpEvent { id, title: &rep.title, state: "done", progress: Some(&p), conflict: None, errors: out.errors, undo, cancelled: out.cancelled });
+        let _ = rep.app.emit_to(rep.target.as_str(), "op", OpEvent { id, title: &rep.title, state: "done", progress: Some(&p), conflict: None, errors: out.errors, undo, cancelled: out.cancelled });
     });
     id
 }
@@ -132,9 +134,9 @@ fn count(n: usize, what: &str) -> String {
 
 /// Copy/move `sources` into `dest` (optionally under new `names`, one per source).
 #[tauri::command]
-pub fn op_transfer(app: AppHandle, sources: Vec<String>, dest: String, mv: bool, names: Option<Vec<String>>) -> u64 {
+pub fn op_transfer(app: AppHandle, window: tauri::Window, sources: Vec<String>, dest: String, mv: bool, names: Option<Vec<String>>) -> u64 {
     let title = format!("{} {} to {}", if mv { "Moving" } else { "Copying" }, count(sources.len(), "item"), Path::new(&dest).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(dest.clone()));
-    spawn(&app, title, false, move |rep| {
+    spawn(&app, &window, title, false, move |rep| {
         let pairs: Vec<(PathBuf, PathBuf)> = sources
             .iter()
             .enumerate()
@@ -158,21 +160,21 @@ pub fn op_transfer(app: AppHandle, sources: Vec<String>, dest: String, mv: bool,
 }
 
 #[tauri::command]
-pub fn op_delete(app: AppHandle, items: Vec<String>) -> u64 {
-    spawn(&app, format!("Deleting {}", count(items.len(), "item")), true, move |rep| (ops::delete(&paths(&items), rep), None))
+pub fn op_delete(app: AppHandle, window: tauri::Window, items: Vec<String>) -> u64 {
+    spawn(&app, &window, format!("Deleting {}", count(items.len(), "item")), true, move |rep| (ops::delete(&paths(&items), rep), None))
 }
 
 #[tauri::command]
-pub fn op_trash(app: AppHandle, items: Vec<String>) -> u64 {
-    spawn(&app, format!("Moving {} to the trash", count(items.len(), "item")), true, move |rep| {
+pub fn op_trash(app: AppHandle, window: tauri::Window, items: Vec<String>) -> u64 {
+    spawn(&app, &window, format!("Moving {} to the trash", count(items.len(), "item")), true, move |rep| {
         let (out, undo) = ops::to_trash(&paths(&items), rep);
         (out, Some(undo))
     })
 }
 
 #[tauri::command]
-pub fn op_undo(app: AppHandle, undo: Undo) -> u64 {
-    spawn(&app, "Undoing".into(), false, move |rep| match undo {
+pub fn op_undo(app: AppHandle, window: tauri::Window, undo: Undo) -> u64 {
+    spawn(&app, &window, "Undoing".into(), false, move |rep| match undo {
         Undo::Move { pairs } => {
             let pairs: Vec<_> = pairs.into_iter().map(|(now, orig)| (PathBuf::from(now), PathBuf::from(orig))).collect();
             (ops::transfer(&pairs, true, rep), None)
@@ -296,7 +298,7 @@ fn run_tool(rep: &Rep, argv: &[String], cwd: &Path, output: &Path, out: &mut ops
 }
 
 #[tauri::command]
-pub fn op_compress(app: AppHandle, items: Vec<String>, format: String) -> R<u64> {
+pub fn op_compress(app: AppHandle, window: tauri::Window, items: Vec<String>, format: String) -> R<u64> {
     let first = PathBuf::from(items.first().ok_or("nothing selected")?);
     let dir = first.parent().unwrap_or(Path::new("/")).to_path_buf();
     let base = if items.len() == 1 {
@@ -316,7 +318,7 @@ pub fn op_compress(app: AppHandle, items: Vec<String>, format: String) -> R<u64>
         f => return Err(format!("unknown format {f}")),
     };
     let title = format!("Compressing to {}", out_path.file_name().unwrap_or_default().to_string_lossy());
-    Ok(spawn(&app, title, false, move |rep| {
+    Ok(spawn(&app, &window, title, false, move |rep| {
         let mut out = ops::Outcome::default();
         let ok = run_tool(rep, &argv, &dir, &out_path, &mut out);
         let undo = ok.then(|| Undo::Trash { paths: vec![out_path.to_string_lossy().into_owned()] });
@@ -329,8 +331,8 @@ pub fn op_compress(app: AppHandle, items: Vec<String>, format: String) -> R<u64>
 
 /// Extract each archive into a new folder named after it, next to it.
 #[tauri::command]
-pub fn op_extract(app: AppHandle, items: Vec<String>) -> u64 {
-    spawn(&app, format!("Extracting {}", count(items.len(), "archive")), false, move |rep| {
+pub fn op_extract(app: AppHandle, window: tauri::Window, items: Vec<String>) -> u64 {
+    spawn(&app, &window, format!("Extracting {}", count(items.len(), "archive")), false, move |rep| {
         let mut out = ops::Outcome::default();
         let mut made = vec![];
         for a in &items {

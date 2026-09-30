@@ -1,6 +1,7 @@
 // App shell: tabs (each with one or two panes), top bar, sidebar, info panel, status bar, keyboard routing.
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Pane, Host, isFolder, View } from "./pane";
 import { Settings } from "./theme";
 import { $, Entry, invoke, esc, shown, baseName, parentOf, fmtSize, fmtDate, typeName, ext, edgeColor } from "./util";
@@ -214,14 +215,29 @@ $("info-grip").addEventListener("mousedown", (ev) => {
 });
 $("info-grip").addEventListener("dblclick", () => { document.documentElement.style.setProperty("--info-w", "420px"); invoke("set_settings", { patch: { infoWidth: 420 } }); });
 
+// ---------- focus mode: just the files (F12, or double-click empty top-bar space; Esc/F12 to leave) ----------
+export const focusMode = () => $("app").classList.contains("zen");
+export function setFocusMode(on = !focusMode(), save = true) {
+  $("app").classList.toggle("zen", on);
+  $("app").classList.remove("peek");
+  if (save) invoke("set_settings", { patch: { focusMode: on } });
+  pane()?.scroller.focus({ preventScroll: true });
+  if (!on && pane()) info();
+}
+$("topbar").addEventListener("dblclick", (ev) => { if (ev.target === $("topbar")) setFocusMode(true); });
+// in focus mode the top bar peeks in while the pointer touches the top edge (or the path is being edited)
+window.addEventListener("mousemove", (ev) => { if (focusMode() && ev.clientY <= 3) $("app").classList.add("peek"); }, { passive: true });
+$("topbar").addEventListener("mouseleave", () => { if (document.activeElement !== pathedit) $("app").classList.remove("peek"); });
+
 // ---------- location bar ----------
 const crumbs = $("crumbs"), pathedit = $<HTMLInputElement>("pathedit"), filterEl = $<HTMLInputElement>("filter");
 export function editPath() {
+  if (focusMode()) $("app").classList.add("peek");
   crumbs.hidden = true; pathedit.hidden = false;
   pathedit.value = isFolder(pane().loc) ? pane().loc : "";
   pathedit.focus(); pathedit.select();
 }
-function endEdit() { pathedit.hidden = true; crumbs.hidden = false; }
+function endEdit() { pathedit.hidden = true; crumbs.hidden = false; if (!$("topbar").matches(":hover")) $("app").classList.remove("peek"); }
 crumbs.addEventListener("click", (ev) => {
   const b = (ev.target as HTMLElement).closest("button");
   if (b) pane().navigate(b.dataset.p!); else editPath();
@@ -292,6 +308,8 @@ window.addEventListener("keydown", (ev) => {
   if (c && k === "PageDown") { stop(); cur = (cur + 1) % tabs.length; showTab(); return; }
   if (c && k === "PageUp") { stop(); cur = (cur + tabs.length - 1) % tabs.length; showTab(); return; }
   if (c && lk === "q") { stop(); getCurrentWindow().close(); return; }
+  if (c && !ev.shiftKey && lk === "n") { stop(); invoke("open_window", { loc: isFolder(p.loc) ? p.loc : HOME }); return; }
+  if (k === "F12") { stop(); setFocusMode(); return; }
   if (ev.altKey && k === ".") { stop(); toggleHidden(); return; }
   if (k === "F6") { stop(); editPath(); return; }
   if (k === "F9") { stop(); const sb = $("sidebar"); sb.hidden = !sb.hidden; $("app").classList.toggle("noside", sb.hidden); return; }
@@ -313,7 +331,7 @@ window.addEventListener("keydown", (ev) => {
   if (p.key(ev)) return;
   for (const h of hooks.keys) if (h(ev, p)) { stop(); return; }
   if (k === "Backspace") { stop(); p.goUp(); return; }
-  if (k === "Escape") { if (p.filter) { p.filter = ""; p.rebuild(); } else { p.sel.clear(); p.refreshSel(); } return; }
+  if (k === "Escape") { if (p.filter) { p.filter = ""; p.rebuild(); } else if (p.sel.size) { p.sel.clear(); p.refreshSel(); } else if (focusMode()) setFocusMode(false); return; }
   if (c && lk === "a") { stop(); p.selectAll(); return; }
   if (ev.ctrlKey && ev.shiftKey && lk === "a") { stop(); p.invertSel(); return; }
   // Type-to-filter: printable keys go to the filter box.
@@ -339,7 +357,7 @@ export function applySettings(s: Settings) {
   const iw = Math.max(260, Math.min(1400, +s.infoWidth || 420));
   document.documentElement.style.setProperty("--info-w", `${iw}px`);
   $("titlebar").hidden = !s.titlebar;
-  if (first) toggleHidden(!!s.showHidden);
+  if (first) { toggleHidden(!!s.showHidden); setFocusMode(!!s.focusMode, false); }
 }
 
 export async function start(initial: { loc: string; select?: string }[]) {
@@ -349,7 +367,8 @@ export async function start(initial: { loc: string; select?: string }[]) {
   const started = performance.now();
   // Second launches and "Show in folder" (D-Bus) arrive here: open each in a tab. If we were just started
   // bare (e.g. by D-Bus activation), reuse that untouched home tab instead of stacking a second one.
-  listen<{ targets: { loc: string; select: string | null }[]; properties: string[] }>("open", ({ payload }) => {
+  // window-scoped: the backend picks which window gets each request (the one used last)
+  getCurrentWebviewWindow().listen<{ targets: { loc: string; select: string | null }[]; properties: string[] }>("open", ({ payload }) => {
     payload.targets.forEach((t, i) => {
       const fresh = bare && i === 0 && tabs.length === 1 && performance.now() - started < 3000 && pane().loc === HOME && !pane().back.length;
       if (fresh) pane().navigate(t.loc, false, t.select ?? undefined);

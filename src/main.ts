@@ -18,8 +18,10 @@ if (dialog) {
   await import("./sidebar");
   await import("./search");
   await import("./term");
+  await import("./nav");
   await initTheme(app.applySettings);
-  const targets = await invoke<{ loc: string; select: string | null }[]>("start_args");
+  // extra windows get their targets in the URL; the first one reads argv
+  const targets: { loc: string; select: string | null }[] = q.has("targets") ? JSON.parse(q.get("targets")!) : await invoke("start_args");
   await app.start(targets.map((t) => ({ loc: t.loc, select: t.select ?? undefined })));
-  if (import.meta.env.DEV && (await invoke<boolean>("selftest", {}))) import("./selftest");
+  if (import.meta.env.DEV && !q.has("targets") && (await invoke<boolean>("selftest", {}))) import("./selftest");
 }

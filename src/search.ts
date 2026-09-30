@@ -5,7 +5,7 @@ import { hooks, pane, allPanes, flash, HOME } from "./app";
 import { isFolder } from "./pane";
 
 type Q = { id: number; root: string; q: string; content: boolean; hidden: boolean };
-let nextId = 1;
+let nextId = 1 + Math.floor(Math.random() * 2 ** 30); // unique per window: hits go to every window
 const results = new Map<number, Entry[]>();
 const parse = (loc: string) => JSON.parse(loc.slice(7)) as Q;
 

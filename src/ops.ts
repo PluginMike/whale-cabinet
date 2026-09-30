@@ -2,6 +2,7 @@
 // conflicts (separate dialog window), Trash view, drag & drop (internal, out to other apps, in from them).
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { startDrag as nativeDrag } from "@crabnebula/tauri-plugin-drag";
 import { $, Entry, invoke, esc, fmtSize, baseName, parentOf, joinPath, shown } from "./util";
 import { hooks, pane, allPanes, flash, HOME, host, tab } from "./app";
@@ -36,7 +37,8 @@ function dropCard(id: number, delay = 0) {
   setTimeout(() => { el?.remove(); jobs.delete(id); panel.hidden = !panel.children.length; }, delay);
 }
 
-listen<OpEvent>("op", ({ payload: ev }) => {
+// only this window's jobs: the backend sends each job's events to the window that started it
+getCurrentWebviewWindow().listen<OpEvent>("op", ({ payload: ev }) => {
   const el = jobCard(ev.id, ev.title);
   if (ev.state === "progress" && ev.progress) {
     const p = ev.progress;

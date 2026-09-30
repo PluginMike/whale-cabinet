@@ -5,7 +5,7 @@
 use crate::listing::{target_for, Target};
 use serde::Serialize;
 use std::path::Path;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::AppHandle;
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct OpenRequest {
@@ -36,11 +36,7 @@ pub struct FileManager1 {
 
 impl FileManager1 {
     fn send(&self, req: OpenRequest) {
-        let _ = self.app.emit("open", req);
-        if let Some(w) = self.app.get_webview_window("main") {
-            let _ = w.unminimize();
-            let _ = w.set_focus();
-        }
+        crate::route_open(&self.app, req);
     }
 }
 

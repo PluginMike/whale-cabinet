@@ -14,11 +14,12 @@ mod settings;
 mod tags;
 mod term;
 mod theme;
+mod zoxide;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use serde_json::{Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -26,7 +27,10 @@ use std::sync::{mpsc, Mutex};
 use std::time::Duration;
 use tauri::{async_runtime::spawn_blocking, AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
-struct Watched(Mutex<(RecommendedWatcher, HashSet<PathBuf>)>);
+/// inotify watcher + what each window wants watched (the watcher follows the union).
+struct Watched(Mutex<(RecommendedWatcher, HashSet<PathBuf>, HashMap<String, HashSet<PathBuf>>)>);
+/// Label of the browser window used last: D-Bus "Show in folder" requests go there.
+struct LastWin(Mutex<String>);
 struct Settings(Mutex<Map<String, Value>>);
 
 type R<T> = Result<T, String>;
@@ -175,12 +179,17 @@ fn open_path(path: String) -> R<()> {
     std::process::Command::new("xdg-open").arg(&path).spawn().map(drop).map_err(|e| e.to_string())
 }
 
-/// Replace the set of non-recursively watched folders (current folder + expanded ones).
+/// Replace this window's set of non-recursively watched folders (current folder + expanded ones).
 #[tauri::command]
-fn watch(paths: Vec<String>, state: State<Watched>) {
+fn watch(paths: Vec<String>, window: tauri::Window, state: State<Watched>) {
     let mut g = state.0.lock().unwrap();
-    let (w, cur) = &mut *g;
-    let want: HashSet<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    g.2.insert(window.label().to_owned(), paths.into_iter().map(PathBuf::from).collect());
+    sync_watches(&mut g);
+}
+
+fn sync_watches(g: &mut (RecommendedWatcher, HashSet<PathBuf>, HashMap<String, HashSet<PathBuf>>)) {
+    let (w, cur, per) = g;
+    let want: HashSet<PathBuf> = per.values().flatten().cloned().collect();
     for p in cur.difference(&want) {
         let _ = w.unwatch(p);
     }
@@ -311,8 +320,7 @@ fn set_app_id(win: &tauri::WebviewWindow, id: &str) {
 #[tauri::command]
 async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, width: f64, height: f64) -> R<String> {
     let label = format!("dlg-{}", DIALOG_N.fetch_add(1, Ordering::Relaxed));
-    let enc: String = arg.bytes().map(|b| if b.is_ascii_alphanumeric() { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-    let url = format!("index.html?dialog={kind}&arg={enc}");
+    let url = format!("index.html?dialog={kind}&arg={}", url_arg(&arg));
     let (tx, rx) = mpsc::channel();
     let (l, a) = (label.clone(), app.clone());
     app.run_on_main_thread(move || {
@@ -334,6 +342,64 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
     .map_err(|e| e.to_string())?;
     blocking(move || rx.recv().map_err(|e| e.to_string())).await???;
     Ok(label)
+}
+
+fn url_arg(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+// ---------- browser windows ----------
+
+static WIN_N: AtomicU32 = AtomicU32::new(1);
+fn is_browser(label: &str) -> bool {
+    label == "main" || label.starts_with("win-")
+}
+
+/// Open another browser window (same process: clipboard, jobs and tags stay shared) showing `targets`.
+/// Wayland compositors map it on the workspace you're on.
+fn new_window(app: &AppHandle, targets: Vec<listing::Target>) {
+    let label = format!("win-{}", WIN_N.fetch_add(1, Ordering::Relaxed));
+    let url = format!("index.html?targets={}", url_arg(&serde_json::to_string(&targets).unwrap_or_default()));
+    let a = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let title = if isolated() { "WCTEST Whale Cabinet" } else { "Whale Cabinet" };
+        match WebviewWindowBuilder::new(&a, &label, WebviewUrl::App(url.into())).title(title).inner_size(1200.0, 760.0).decorations(false).transparent(true).build() {
+            Ok(w) => {
+                let _ = w.set_focus();
+            }
+            Err(e) => eprintln!("whale-cabinet: couldn't open a window: {e}"),
+        }
+    });
+}
+
+/// Hand an open request (D-Bus "Show in folder") to the window used last, or open a window for it.
+pub fn route_open(app: &AppHandle, req: fm1::OpenRequest) {
+    let last = app.state::<LastWin>().0.lock().unwrap().clone();
+    let w = app.get_webview_window(&last).or_else(|| app.webview_windows().into_values().find(|w| is_browser(w.label())));
+    match w {
+        Some(w) => {
+            let _ = app.emit_to(w.label(), "open", req);
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+        None => new_window(app, req.targets),
+    }
+}
+
+#[tauri::command]
+fn open_window(app: AppHandle, loc: String) {
+    new_window(&app, vec![listing::Target { loc, select: None }]);
+}
+
+// ---------- zoxide ----------
+
+#[tauri::command]
+fn zoxide_add(path: String) {
+    zoxide::add(&path);
+}
+#[tauri::command]
+async fn zoxide_query(q: String, limit: usize) -> R<Vec<(f64, String)>> {
+    blocking(move || zoxide::query(&q.split_whitespace().map(str::to_owned).collect::<Vec<_>>(), limit)).await?
 }
 
 // ---------- previews ----------
@@ -601,22 +667,30 @@ fn main() {
             if targets.is_empty() {
                 targets.push(home_target());
             }
-            let _ = app.emit("open", fm1::OpenRequest { targets, properties: vec![] });
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
+            new_window(app, targets);
         }));
     }
     builder
         .plugin(tauri_plugin_drag::init())
+        .on_window_event(|w, ev| match ev {
+            tauri::WindowEvent::Focused(true) if is_browser(w.label()) => *w.state::<LastWin>().0.lock().unwrap() = w.label().to_owned(),
+            tauri::WindowEvent::Destroyed => {
+                let st = w.state::<Watched>();
+                let mut g = st.0.lock().unwrap();
+                if g.2.remove(w.label()).is_some() {
+                    sync_watches(&mut g);
+                }
+            }
+            _ => {}
+        })
         .manage(jobs::Jobs::default())
         .manage(jobs::Clip::default())
         .manage(term::Terms::default())
         .manage(search::Searches::default())
         .setup(|app| {
             let h = app.handle().clone();
-            app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new()))));
+            app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
+            app.manage(LastWin(Mutex::new("main".into())));
             app.manage(Settings(Mutex::new(settings::load())));
             app.manage(tags::Store::new(settings::dir()));
             // Seed the tag index from the home folder in the background (Dolphin-set tags included).
@@ -644,7 +718,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

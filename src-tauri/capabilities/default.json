@@ -2,6 +2,7 @@
   "identifier": "default",
   "windows": [
     "main",
+    "win-*",
     "dlg-*"
   ],
   "permissions": [

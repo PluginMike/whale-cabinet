@@ -9,7 +9,7 @@ import { isFolder } from "./pane";
 import type { Theme } from "./theme";
 
 const panel = $("termpanel");
-const ID = 1;
+const ID = 1 + Math.floor(Math.random() * 2 ** 30); // unique per window: PTY events go to every window
 let term: Terminal | null = null, fit: FitAddon | null = null, alive = false, palette: string[] = [];
 
 /** Resolve a CSS variable (which may be a color-mix) to a concrete colour string xterm understands. */
