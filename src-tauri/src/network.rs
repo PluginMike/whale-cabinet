@@ -119,7 +119,12 @@ pub fn mount(uri: &str, c: &Creds) -> Result<String, String> {
     }
     let pty = native_pty_system().openpty(PtySize { rows: 24, cols: 200, pixel_width: 0, pixel_height: 0 }).map_err(|e| e.to_string())?;
     let mut cmd = CommandBuilder::new("gio");
-    cmd.args(["mount", uri]);
+    cmd.arg("mount");
+    if c.user.is_empty() && c.password.is_empty() {
+        // try anonymous first (public FTP/WebDAV); servers that need a login still prompt, and we ask the user
+        cmd.arg("--anonymous");
+    }
+    cmd.arg(uri);
     cmd.env("LC_ALL", "C.UTF-8"); // prompts in English (so they can be recognised), text still UTF-8
     let mut child = pty.slave.spawn_command(cmd).map_err(|e| format!("gio: {e} (install gvfs)"))?;
     drop(pty.slave);
@@ -253,31 +258,37 @@ pub fn parse_list(out: &str) -> Vec<Found> {
         .collect()
 }
 
-/// What's inside a network location that needs no mount to list (smb://, smb://WORKGROUP/, network:///).
-pub fn browse(uri: &str) -> Result<Vec<Found>, String> {
-    let mut child = Command::new("gio")
-        .args(["list", "-u", "-a", "standard::display-name,standard::target-uri", uri])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("gio: {e} (install gvfs)"))?;
+/// Run gio with a time limit (the first SMB browse sits on a ~20 s NetBIOS broadcast timeout).
+fn gio_timed(args: &[&str], secs: u64) -> Result<std::process::Output, String> {
+    let mut child = Command::new("gio").args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| format!("gio: {e} (install gvfs)"))?;
     let t = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            _ if t.elapsed() > Duration::from_secs(10) => {
-                let _ = child.kill();
-                return Err("browsing the network timed out".into());
-            }
-            _ => std::thread::sleep(Duration::from_millis(50)),
+    while child.try_wait().map_err(|e| e.to_string())?.is_none() {
+        if t.elapsed() > Duration::from_secs(secs) {
+            let _ = child.kill();
+            return Err("browsing the network timed out".into());
         }
+        std::thread::sleep(Duration::from_millis(50));
     }
-    let o = child.wait_with_output().map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        return Err(String::from_utf8_lossy(&o.stderr).trim().trim_start_matches("gio: ").to_owned());
+    child.wait_with_output().map_err(|e| e.to_string())
+}
+
+/// What's inside a browsable network location (smb://, smb://WORKGROUP/, smb://server/). gvfs wants the
+/// browse location itself mounted first; that's done anonymously when needed.
+pub fn browse(uri: &str) -> Result<Vec<Found>, String> {
+    let list = || -> Result<Vec<Found>, String> {
+        let o = gio_timed(&["list", "-u", "-a", "standard::display-name,standard::target-uri", uri], 35)?;
+        if !o.status.success() {
+            return Err(String::from_utf8_lossy(&o.stderr).trim().trim_start_matches("gio: ").to_owned());
+        }
+        Ok(parse_list(&String::from_utf8_lossy(&o.stdout)))
+    };
+    match list() {
+        Err(e) if e.contains("not mounted") => {
+            gio_timed(&["mount", "--anonymous", uri], 35)?;
+            list()
+        }
+        r => r,
     }
-    Ok(parse_list(&String::from_utf8_lossy(&o.stdout)))
 }
 
 // ---------- keyring (secret-tool) ----------

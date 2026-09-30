@@ -118,7 +118,7 @@ export function connectDialog(uri = "", why = "") {
     box.innerHTML = `<span class="hint">Looking in ${esc(at)}…</span>`;
     try {
       const found = await invoke<{ name: string; uri: string }[]>("net_browse", { uri: at });
-      box.innerHTML = found.length ? found.map((f) => `<button class="chip-btn" data-found="${esc(f.uri)}" title="${esc(f.uri)}">${esc(f.name)}</button>`).join("") : `<span class="hint">Nothing found in ${esc(at)}</span>`;
+      box.innerHTML = found.length ? found.map((f) => `<button class="chip-btn" data-found="${esc(f.uri)}" title="${esc(f.uri)}">${esc(f.name)}</button>`).join("") : `<span class="hint">Nothing found in ${esc(at)}. Windows 10/11 shares are found through WS-Discovery (install gvfs-wsdd); or type smb://server/share above.</span>`;
     } catch (err) { box.innerHTML = `<span class="hint">${esc(String(err))}</span>`; }
   };
   const key = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === "Escape") close(); if (e.key === "Enter" && !(e.target as HTMLElement).closest("button")) { e.preventDefault(); go(); } };
