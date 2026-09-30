@@ -66,7 +66,7 @@ async function settingsDialog(arg: string) {
     body.querySelectorAll<HTMLElement>("[data-pane]").forEach((d) => (d.hidden = d.dataset.pane !== tab));
   };
   body.querySelector(".tabs")!.addEventListener("click", (e) => { const t = (e.target as HTMLElement).dataset.tab; if (t) show(t); });
-  show(arg === "plugins" ? "plugins" : "general");
+  show(arg.startsWith("plugins") ? "plugins" : "general");
   const form = body.querySelector<HTMLFormElement>("#sf")!;
   form.addEventListener("input", (e) => {
     const t = e.target as HTMLInputElement;
@@ -74,11 +74,11 @@ async function settingsDialog(arg: string) {
     if (t.type === "range") t.nextElementSibling!.textContent = `${Math.round(+t.value * 100)}%`;
     invoke("set_settings", { patch: { [t.name]: v } });
   });
-  body.querySelector("[data-pane=plugins]")!.append(await pluginSettings());
+  body.querySelector("[data-pane=plugins]")!.append(await pluginSettings(arg.split(":")[1]));
 }
 
 /** Settings → Plugins: each plugin with its switch, its own settings (secrets go to the keyring) and its README. */
-async function pluginSettings() {
+async function pluginSettings(open?: string) {
   type P = { name: string; title: string; description: string; consent: boolean | null; settings: { key: string; label: string; secret: boolean; placeholder: string }[] };
   const list = await invoke<P[]>("plugins_list").catch(() => [] as P[]);
   const box = document.createElement("div");
@@ -121,6 +121,7 @@ async function pluginSettings() {
       } catch (err) { d.querySelector(".err")?.remove(); d.querySelector(".pl-readme")!.insertAdjacentHTML("beforebegin", `<p class="err">${esc(String(err))}</p>`); }
     });
     box.append(d);
+    if (p.name === open) d.open = true; // "plugins:<name>" opens that one
   }
   return box;
 }

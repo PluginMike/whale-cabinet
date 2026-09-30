@@ -12,6 +12,19 @@ pictures, PDFs, video, code and Markdown · tags, colours and ratings shared wit
 disk-usage map · encryption · administrator actions through polkit · live theming from DMS and Hyprland ·
 **plugins** (Nextcloud, Immich and Bitwarden included).
 
+![Pictures in the icon view, with the info panel's preview, tags and rating](docs/screenshots/pictures.png)
+
+| | |
+|---|---|
+| ![A git repository: status badges, the branch chip and the rendered README](docs/screenshots/git-markdown.png) | ![Split view: a folder pulled out inline next to a compact list](docs/screenshots/split-view.png) |
+| Git badges and a live Markdown preview | Split view, drawers pulled out inline |
+| ![The built-in viewer showing rendered Markdown](docs/screenshots/viewer-markdown.png) | ![The built-in viewer showing a PDF](docs/screenshots/viewer-pdf.png) |
+| The viewer: Markdown, code, pictures, video… | …and every page of a PDF |
+| ![Quick open: fuzzy search across your home folder](docs/screenshots/quick-open.png) | ![The command palette](docs/screenshots/command-palette.png) |
+| Quick open (Ctrl+P) | Every command in the palette (Ctrl+Shift+P) |
+| ![Disk usage as a sunburst](docs/screenshots/disk-usage.png) | ![Settings → Plugins with the Immich plugin opened](docs/screenshots/plugins.png) |
+| Disk usage map | Plugins, with their settings and instructions |
+
 ## Install
 
 Download the AppImage or the .deb from [Releases](https://github.com/PluginMike/whale-cabinet/releases)

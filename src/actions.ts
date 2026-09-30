@@ -73,13 +73,13 @@ export const actions: Action[] = [
   { label: "Plugins", run: () => openSettings("plugins") },
 ];
 
-/** Letters of `q` in order in `label` (fuzzy); lower score = better: earlier and tighter matches. */
-function score(label: string, q: string) {
+/** Letters of `q` in order in `label` (fuzzy); lower score = better: earlier and tighter matches. null = no match. */
+function score(label: string, q: string): number | null {
   const l = label.toLowerCase(), s = q.toLowerCase().replace(/\s+/g, "");
   let pos = -1, first = -1, gaps = 0;
   for (const c of s) {
     const i = l.indexOf(c, pos + 1);
-    if (i < 0) return -1;
+    if (i < 0) return null;
     if (first < 0) first = i;
     if (pos >= 0) gaps += i - pos - 1;
     pos = i;
@@ -102,7 +102,7 @@ modes.actions = {
   hint: "Enter run · Esc close",
   async query(q) {
     const live = actions.filter((a) => !a.when || a.when());
-    const ranked = (q.trim() ? live.map((a) => [a, score(a.label, q.trim())] as const).filter(([, s]) => s >= 0).sort((a, b) => a[1] - b[1]).map(([a]) => a) : live);
+    const ranked = (q.trim() ? live.map((a) => [a, score(a.label, q.trim())] as const).filter((x): x is readonly [Action, number] => x[1] !== null).sort((a, b) => a[1] - b[1]).map(([a]) => a) : live);
     byLabel.clear();
     return { items: ranked.map((a) => { byLabel.set(a.label, a); return { path: a.label, dir: false, label: a.label, hl: q.trim() ? fuzzyHits(a.label, q.trim()) : [], sub: a.kb, noIcon: true }; }) };
   },
