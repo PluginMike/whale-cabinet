@@ -18,7 +18,8 @@ Everything is per-user; nothing needs root. `--default` runs
 installs a `org.freedesktop.FileManager1` D-Bus activation file, so browsers' "Show in folder" starts Whale Cabinet
 with the file selected. While it runs, it also claims that D-Bus name from Dolphin.
 
-Only one instance runs: a second `whale-cabinet …` opens a new tab in the existing window.
+Only one process runs: a second `whale-cabinet …` (or your SUPER+E keybind) opens a new window on the workspace
+you're on, sharing the clipboard, jobs and tags with the others. Ctrl+N does the same from inside.
 
 ```sh
 whale-cabinet ~/Downloads                  # folders
@@ -45,12 +46,16 @@ bind = SUPER, E, exec, whale-cabinet
 ## Build from source
 
 Needs Rust (via [rustup](https://rustup.rs)), Node ≥ 20, WebKitGTK 4.1 and the usual build tools.
+Required at runtime (install.sh checks): zoxide (jump box, Frequent), fd (quick open), git (badges), gvfs with its
+smb/dav/nfs backends (network locations) and polkit (administrator actions).
 The optional tools light up extra features: poppler (PDF previews), ffmpegthumbnailer + ffmpeg (video thumbnails,
-media details), libarchive/zip/7-Zip (compress/extract), wl-clipboard (copy/paste with other apps), udisks2 (devices).
+media details), libarchive/zip/7-Zip (compress/extract), wl-clipboard (copy/paste with other apps), udisks2 (devices),
+libsecret's secret-tool (remembering network passwords).
 
 **Arch / CachyOS / Manjaro**
 ```sh
 sudo pacman -S --needed base-devel webkit2gtk-4.1 curl wget file openssl librsvg libappindicator-gtk3 nodejs npm rustup
+sudo pacman -S --needed zoxide fd git gvfs gvfs-smb gvfs-dav gvfs-nfs polkit
 sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-clipboard udisks2   # optional
 ```
 
@@ -58,12 +63,14 @@ sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-
 ```sh
 sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel libxdo-devel nodejs npm
 sudo dnf group install c-development
+sudo dnf install zoxide fd-find git gvfs gvfs-smb gvfs-fuse polkit
 sudo dnf install poppler-utils ffmpegthumbnailer ffmpeg-free bsdtar zip p7zip wl-clipboard udisks2   # optional
 ```
 
 **Debian / Ubuntu**
 ```sh
 sudo apt install build-essential libwebkit2gtk-4.1-dev libssl-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev curl wget file nodejs npm
+sudo apt install zoxide fd-find git gvfs gvfs-backends gvfs-fuse pkexec
 sudo apt install poppler-utils ffmpegthumbnailer ffmpeg libarchive-tools zip 7zip wl-clipboard udisks2   # optional
 ```
 
@@ -79,8 +86,9 @@ fish users with a user-local rustup: `fish_add_path ~/.cargo/bin`.
 ## Tests
 
 ```sh
-(cd src-tauri && cargo test)   # 50 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
-                               # dms-colors.json, hyprctl JSON), .desktop/mimeapps/globs, thumbnails, xbel, search, pty…
+(cd src-tauri && cargo test)   # 63 Rust unit tests: file ops, tags/xattrs, theme parsing (dank-colors.css,
+                               # dms-colors.json, hyprctl JSON), .desktop/mimeapps/globs, thumbnails, xbel, search, pty,
+                               # fuzzy ranking, git porcelain, recently-used.xbel, gio prompts, admin helper, duplicates…
 (cd src-tauri && cargo test real_system -- --ignored --nocapture)   # Open With / icons against this machine
 scripts/smoke.sh               # launches the app: end-to-end UI run against a temp tree (10k files, odd names),
                                # file ops, DMS re-theme timing, built-in fallback; grim screenshots
@@ -88,7 +96,8 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
 
 ## Usage
 
-- Sidebar drawers are Places; the active one slides out.
+- Sidebar drawers are Places; the active one slides out. Sections (Places, Recent, Frequent, Devices, Network, Tags,
+  Tools) collapse with a click on their heading, and stay that way.
 - Chevron (or →/←) pulls a folder out inline; double-click or Enter goes into it.
 - Click the empty part of the path bar (or Ctrl+L) to type a path; `~` and `file://` work.
 - Start typing to filter the current view. Hidden files: Ctrl+H (also honours `.hidden` files).
@@ -102,6 +111,60 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
   window edge to hand them to another app. Files dropped in from other apps land where you drop them.
 - Long operations show in a progress panel with Cancel; name clashes open a conflict window
   (Skip / Overwrite / Rename / apply to all).
+
+### Finding things: quick open, fuzzy search, zoxide
+
+- **Ctrl+P** opens quick open: type a few letters of anything under your home ("dl rep" → `Downloads/report.pdf`).
+  The list comes from `fd` (hidden and git-ignored files skipped) and is ranked by nucleo, the fuzzy matcher from
+  Helix; matched letters are highlighted and folders you use a lot (zoxide) rank a little higher. Enter opens,
+  Shift+Enter shows the item in its folder, Ctrl+Enter opens it in a new tab.
+- **Ctrl+F** has a *Fuzzy* option: letters in order, best matches first (the Relevance sort).
+- Every folder you open is fed to `zoxide add`, so your shell's `z` learns from the file manager too.
+  **Ctrl+J** (or typing `z foo` in the path bar) jumps by frecency; the sidebar's *Frequent* section lists your top folders.
+
+### Focus mode
+
+F12 hides everything but the files (sidebar, info panel, top and status bars). Touch the top edge of the window
+(or press Ctrl+L) and the top bar slides back in; F12 or Esc leaves focus mode. It's remembered.
+
+### Git
+
+Inside a git work tree, items get badges: **M** modified, **+** staged, **?** untracked, **!** conflict; ignored
+items are dimmed, and folders show the most important state inside them. The top bar shows the branch with
+↑ahead/↓behind. One `git status` per repository, re-run when files (or the repo's `.git`) change. A dotfiles repo
+at `~` only shows real changes, not "untracked".
+
+### Recent files
+
+Recent (sidebar) lists what you opened lately, grouped Today / Yesterday / This week / … with bigger rows and
+the app each file was opened with; the newest five are right in the sidebar. It's the shared
+`~/.local/share/recently-used.xbel`, so files opened from GTK apps show up and files opened here show up there.
+Right-click → *Remove from Recent*; the info panel has *Clear history*.
+
+### Network locations
+
+Sidebar → Network → *Connect to server…*: `sftp://host/`, `smb://server/share`, `davs://host/path`, `nfs://host/export`
+or `ftp://`. Hosts from `~/.ssh/config` are one click; *Browse network…* lists SMB workgroups, servers and shares.
+Whale Cabinet runs `gio mount` and answers its questions in the dialog (user, domain, password; "trust this host?"),
+then you browse the gvfs folder like any other. Passwords can be kept in your keyring (secret-tool).
+Saved connections live in `user-places.xbel`, so Dolphin sees them too; ⏏ disconnects.
+
+### Administrator actions
+
+- When a copy, move, delete or trash fails with "permission denied", the job card offers *Retry as administrator*;
+  rename and new folder/file ask the same. These run in a small helper (`pkexec whale-cabinet --admin-helper`), so
+  polkit asks for your password every time and the window itself never runs as root. Conflicts and progress work
+  as usual.
+- Right-click a file → Administrator → *Open as Administrator* runs its default app as root, or *Edit as
+  Administrator* opens a private copy in your normal editor; each save is written back to the original (keeping its
+  owner and permissions), asking for the password each time. Use the latter for editors that refuse to run as root.
+
+### Duplicate files
+
+Sidebar → Tools → *Find duplicates…*: choose a folder and a minimum size. Files are compared by size, then the
+first 64 KiB, then their full SHA-256 (hard links count once). Sets appear biggest waste first; the info panel
+selects the extra copies keeping the newest, the oldest or the one in a folder you pick, then *Move to Trash*
+(Ctrl+Z brings them back).
 
 ### Previews
 
@@ -198,7 +261,11 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
 | Ctrl+F | Search (names, `*`/`?` globs; optional content search) |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | Icons / compact / cabinet list |
 | Ctrl+scroll, Ctrl+= / Ctrl+- / Ctrl+0 | Zoom in / out / reset |
-| Ctrl+Q | Quit |
+| Ctrl+P | Quick open (fuzzy, whole home) |
+| Ctrl+J | Jump to a frequent folder (zoxide); also `z foo` in the path bar |
+| Ctrl+N | New window |
+| F12 | Focus mode |
+| Ctrl+Q | Close window |
 | Space | Quick Look (←/→ flip through files, Esc closes) |
 | F11 | Show/hide the info panel |
 

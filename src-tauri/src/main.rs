@@ -305,21 +305,26 @@ fn watch_hyprland(app: AppHandle) {
 
 static DIALOG_N: AtomicU32 = AtomicU32::new(0);
 
-/// Give a window its own Wayland app id (so Hyprland rules can match `whale-cabinet-dialog`). Must run before it maps.
+/// Give a window its own Wayland app id (so Hyprland rules can match `whale-cabinet-dialog`). GTK only forwards
+/// the id once the window's xdg_toplevel exists, i.e. when it maps, so it's set from the `map` signal.
 fn set_app_id(win: &tauri::WebviewWindow, id: &str) {
     use gtk::prelude::*;
-    extern "C" {
-        fn gdk_wayland_window_set_application_id(w: *mut gtk::gdk::ffi::GdkWindow, id: *const std::os::raw::c_char);
-    }
     let Ok(gw) = win.gtk_window() else { return };
-    gw.realize();
     let is_wayland = gtk::gdk::Display::default().map(|d| d.type_().name() == "GdkWaylandDisplay").unwrap_or(false);
-    if let (true, Some(gdk_win)) = (is_wayland, gw.window()) {
-        use gtk::glib::translate::ToGlibPtr;
-        let c = std::ffi::CString::new(id).unwrap();
-        unsafe { gdk_wayland_window_set_application_id(gdk_win.to_glib_none().0, c.as_ptr()) };
+    if !is_wayland {
+        // NOTE: on X11 dialogs keep WM class whale-cabinet; add XSetClassHint if an X11 user needs rules for them.
+        return;
     }
-    // NOTE: on X11 dialogs keep WM class whale-cabinet; add XSetClassHint if an X11 user needs rules for them.
+    let id = std::ffi::CString::new(id).unwrap();
+    gw.connect_map(move |w| {
+        extern "C" {
+            fn gdk_wayland_window_set_application_id(w: *mut gtk::gdk::ffi::GdkWindow, id: *const std::os::raw::c_char);
+        }
+        if let Some(gdk_win) = w.window() {
+            use gtk::glib::translate::ToGlibPtr;
+            unsafe { gdk_wayland_window_set_application_id(gdk_win.to_glib_none().0, id.as_ptr()) };
+        }
+    });
 }
 
 /// Open a small separate window (Properties, Open With, conflicts, settings) with class `whale-cabinet-dialog`.

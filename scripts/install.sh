@@ -13,6 +13,26 @@ ICONS="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
 DBUS="${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services"
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}/whale-cabinet"
 
+# Runtime dependencies: zoxide (jump/frequent), fd (quick open), git (badges), gvfs/gio (network), polkit (admin).
+missing=()
+command -v zoxide >/dev/null || missing+=(zoxide)
+command -v fd >/dev/null || command -v fdfind >/dev/null || missing+=(fd)
+command -v git >/dev/null || missing+=(git)
+command -v pkexec >/dev/null || missing+=(polkit)
+command -v gio >/dev/null && ls /usr/lib/gvfsd /usr/libexec/gvfsd /usr/lib/gvfs/gvfsd >/dev/null 2>&1 || missing+=(gvfs)
+if (( ${#missing[@]} )); then
+  . /etc/os-release 2>/dev/null
+  case " ${ID:-} ${ID_LIKE:-} " in
+    *" arch "*) pkgs="${missing[*]}"; pkgs=${pkgs/gvfs/gvfs gvfs-smb gvfs-dav gvfs-nfs}; hint="sudo pacman -S --needed $pkgs" ;;
+    *" fedora "*|*" rhel "*) pkgs="${missing[*]}"; pkgs=${pkgs/fd/fd-find}; pkgs=${pkgs/gvfs/gvfs gvfs-smb gvfs-fuse}; hint="sudo dnf install $pkgs" ;;
+    *" debian "*|*" ubuntu "*) pkgs="${missing[*]}"; pkgs=${pkgs/fd/fd-find}; pkgs=${pkgs/polkit/pkexec}; pkgs=${pkgs/gvfs/gvfs gvfs-backends gvfs-fuse}; hint="sudo apt install $pkgs" ;;
+    *) hint="install: ${missing[*]}" ;;
+  esac
+  echo "Whale Cabinet needs: ${missing[*]}" >&2
+  echo "  $hint" >&2
+  exit 1
+fi
+
 if [[ " $* " != *" --no-build "* ]]; then
   [[ -d node_modules ]] || npm install
   npm run tauri build -- --no-bundle

@@ -36,7 +36,7 @@ suites.browse = async (base) => {
   f.value = ""; f.dispatchEvent(new Event("input"));
   // rubber band from the whitespace of row 5 down to row 9
   const pr = p().scroller.getBoundingClientRect();
-  const y = (i: number) => pr.top + 8 + i * 36 + 20, x = pr.right - 300;
+  const rowH = p().geom().rowH, y = (i: number) => pr.top + 8 + i * rowH + rowH / 2, x = pr.right - 300;
   document.querySelector(`.item[data-i="5"] .body`)!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: x, clientY: y(5), button: 0 }));
   window.dispatchEvent(new MouseEvent("mousemove", { clientX: x + 30, clientY: y(9) }));
   window.dispatchEvent(new MouseEvent("mouseup", { clientX: x + 30, clientY: y(9) }));
