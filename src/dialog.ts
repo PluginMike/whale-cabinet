@@ -49,6 +49,8 @@ async function settingsDialog() {
         <div class="mini-h">Double-clicking a folder</div>
         ${radio("folderDblClick", "open", "Opens it (Windows style)")} ${radio("folderDblClick", "expand", "Pulls it out inline (cabinet style)")}
         <label><input type="checkbox" name="singleClick" ${s.singleClick ? "checked" : ""}> Single click opens items</label>
+        <div class="mini-h">When Whale Cabinet starts</div>
+        ${radio("restoreSession", "ask", "Ask to restore the last windows and tabs")} ${radio("restoreSession", "always", "Always restore them")} ${radio("restoreSession", "never", "Start fresh")}
         <label>Terminal <input name="terminal" placeholder="auto (kitty, foot, ghostty, alacritty…)" value="${esc(s.terminal ?? "")}"></label>
       </fieldset>
       <p class="hint">Opacity below 100% only shows when Hyprland blur is on. Hyprland rules for this window: <code>class:^(whale-cabinet)$</code>, dialogs: <code>class:^(whale-cabinet-dialog)$</code>.</p>

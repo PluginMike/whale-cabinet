@@ -47,6 +47,21 @@ export const hooks: {
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
+// ---------- view per folder (settings.folderViews: path → view/sort/zoom last used there) ----------
+let viewSave = 0;
+const MAX_VIEWS = 400;
+export function rememberView(p: Pane) {
+  if (!isFolder(p.loc)) return;
+  const all: Record<string, any> = { ...(settings.folderViews ?? {}) };
+  delete all[p.loc]; // re-insert last so the oldest drop off first
+  all[p.loc] = { v: p.view, s: p.sortKey, a: p.asc, z: Math.round(p.zoom * 100) / 100 };
+  const keys = Object.keys(all);
+  for (const k of keys.slice(0, Math.max(0, keys.length - MAX_VIEWS))) delete all[k];
+  settings.folderViews = all;
+  clearTimeout(viewSave);
+  viewSave = window.setTimeout(() => invoke("set_settings", { patch: { folderViews: all } }), 400);
+}
+
 export function flash(msg: string) {
   const el = $("st-sel");
   el.textContent = msg;
@@ -81,6 +96,13 @@ export const host: Host = {
   groupOf(loc) { return hooks.group[scheme(loc)]; },
   rowScale(loc) { return hooks.rowScale[scheme(loc)] ?? 1; },
   defaultSort(loc) { return hooks.defaultSort[scheme(loc)]; },
+  folderView(loc) {
+    const f = (settings.folderViews ?? {})[loc];
+    const dz = +settings.zoom || 1;
+    if (!f) return { view: (settings.view as View) || "cabinet", sortKey: "name", asc: true, zoom: dz };
+    return { view: f.v ?? settings.view ?? "cabinet", sortKey: f.s ?? "name", asc: f.a ?? true, zoom: f.z ?? dz };
+  },
+  viewChanged(p) { rememberView(p); },
   syncWatch() { invoke("watch", { paths: [...new Set([...tabs.flatMap((t) => t.panes.flatMap((p) => p.watched())), ...hooks.extraWatch.flatMap((f) => f())])] }); },
   flash,
 };
@@ -133,7 +155,58 @@ export function locTitle(loc: string) {
   return f ? f(loc) : baseName(loc) || "/";
 }
 
+// ---------- session: this window's tabs, saved by the backend when the app closes ----------
+type TabState = { locs: string[]; active: number };
+export type WinState = { tabs: TabState[]; cur: number };
+// searches and duplicate scans are one-off; everything else can be reopened
+const restorable = (loc: string) => !loc.startsWith("search:") && !loc.startsWith("dupes:");
+let sentSession = "", sessionTimer = 0;
+function reportSession() {
+  clearTimeout(sessionTimer);
+  sessionTimer = window.setTimeout(() => {
+    const st: WinState = { tabs: tabs.map((t) => ({ locs: t.panes.map((p) => p.loc).filter(restorable), active: t.active })).filter((t) => t.locs.length), cur };
+    const s = JSON.stringify(st);
+    if (s !== sentSession) { sentSession = s; invoke("session_update", { state: st }); }
+  }, 600);
+}
+/** Replace this window's tabs with a saved window state. */
+export function openState(st: WinState) {
+  tabs.length = 0;
+  for (const t of st.tabs) {
+    tabs.push({ panes: t.locs.map((l) => makePane(l)), active: Math.min(t.active, t.locs.length - 1) });
+  }
+  if (!tabs.length) tabs.push({ panes: [makePane(HOME)], active: 0 });
+  cur = Math.min(st.cur, tabs.length - 1);
+  host.syncWatch();
+  showTab();
+}
+const tabCount = (ws: WinState[]) => ws.reduce((n, w) => n + w.tabs.length, 0);
+function offerRestore(ws: WinState[]) {
+  const trivial = ws.length === 1 && ws[0].tabs.length === 1 && ws[0].tabs[0].locs.length === 1 && ws[0].tabs[0].locs[0] === HOME;
+  if (!ws.length || trivial || settings.restoreSession === "never") return;
+  const restore = () => { openState(ws[0]); ws.slice(1).forEach((w) => invoke("open_session_window", { state: w })); };
+  if (settings.restoreSession === "always") { restore(); return; }
+  const t = document.createElement("div");
+  t.className = "toast";
+  const n = tabCount(ws);
+  t.innerHTML = `<span>Restore your last session? ${ws.length > 1 ? `${ws.length} windows, ` : ""}${n} tab${n === 1 ? "" : "s"}</span>
+    <button data-v="1" class="primary">Restore</button><button data-v="0">No thanks</button>
+    <label title="Remember this answer (change it in Settings)"><input type="checkbox"> Always</label>`;
+  document.body.append(t);
+  const done = (yes: boolean) => {
+    if (t.querySelector<HTMLInputElement>("input")!.checked) invoke("set_settings", { patch: { restoreSession: yes ? "always" : "never" } });
+    t.remove();
+    if (yes) restore();
+  };
+  t.addEventListener("click", (e) => { const v = (e.target as HTMLElement).dataset.v; if (v) done(v === "1"); });
+  // gone by itself after a while, and as soon as you start browsing somewhere else
+  setTimeout(() => t.remove(), 20000);
+  closeOffer = () => t.remove();
+}
+let closeOffer = () => {};
+
 function renderTabbar() {
+  reportSession();
   const bar = $("tabbar");
   bar.hidden = tabs.length < 2;
   if (bar.hidden) return;
@@ -279,9 +352,9 @@ $("home").onclick = goHome;
 $("hidden").onclick = () => toggleHidden();
 $("splitbtn").onclick = () => toggleSplit();
 $("menubtn").onclick = () => openSettings();
-$("sort").onchange = () => { const p = pane(); p.sortKey = ($("sort") as HTMLSelectElement).value; p.rebuild(); };
-$("sortdir").onclick = () => { const p = pane(); p.asc = !p.asc; p.rebuild(); };
-$("viewmode").onchange = () => pane().setView(($("viewmode") as HTMLSelectElement).value as View);
+$("sort").onchange = () => { const p = pane(); p.sortKey = ($("sort") as HTMLSelectElement).value; p.rebuild(); rememberView(p); };
+$("sortdir").onclick = () => { const p = pane(); p.asc = !p.asc; p.rebuild(); rememberView(p); };
+$("viewmode").onchange = () => { pane().setView(($("viewmode") as HTMLSelectElement).value as View); rememberView(pane()); };
 
 export function toggleHidden(v = !host.showHidden) {
   host.showHidden = v;
@@ -321,7 +394,7 @@ window.addEventListener("keydown", (ev) => {
   if (c && lk === "w") { stop(); closeTab(); return; }
   if (c && k === "Tab") { stop(); cur = (cur + (ev.shiftKey ? tabs.length - 1 : 1)) % tabs.length; showTab(); return; }
   // Dolphin: Ctrl+1 icons, Ctrl+2 compact, Ctrl+3 details (our cabinet list)
-  if (c && ["1", "2", "3"].includes(k)) { stop(); p.setView((["grid", "compact", "cabinet"] as View[])[+k - 1]); return; }
+  if (c && ["1", "2", "3"].includes(k)) { stop(); p.setView((["grid", "compact", "cabinet"] as View[])[+k - 1]); rememberView(p); return; }
   if (c && k === "PageDown") { stop(); cur = (cur + 1) % tabs.length; showTab(); return; }
   if (c && k === "PageUp") { stop(); cur = (cur + tabs.length - 1) % tabs.length; showTab(); return; }
   if (c && lk === "q") { stop(); getCurrentWindow().close(); return; }
@@ -330,9 +403,9 @@ window.addEventListener("keydown", (ev) => {
   if (ev.altKey && k === ".") { stop(); toggleHidden(); return; }
   if (k === "F6") { stop(); editPath(); return; }
   if (k === "F9") { stop(); const sb = $("sidebar"); sb.hidden = !sb.hidden; $("app").classList.toggle("noside", sb.hidden); return; }
-  if (c && (k === "+" || k === "=")) { stop(); p.setZoom(p.zoom * 1.1); return; }
-  if (c && k === "-") { stop(); p.setZoom(p.zoom / 1.1); return; }
-  if (c && k === "0") { stop(); p.setZoom(1); return; }
+  if (c && (k === "+" || k === "=")) { stop(); p.setZoom(p.zoom * 1.1); rememberView(p); return; }
+  if (c && k === "-") { stop(); p.setZoom(p.zoom / 1.1); rememberView(p); return; }
+  if (c && k === "0") { stop(); p.setZoom(+settings.zoom || 1); rememberView(p); return; }
   if (ev.altKey && k === "ArrowLeft") { stop(); p.goBack(); return; }
   if (ev.altKey && k === "ArrowRight") { stop(); p.goFwd(); return; }
   if (ev.altKey && k === "ArrowUp") { stop(); p.goUp(); return; }
@@ -349,8 +422,8 @@ window.addEventListener("keydown", (ev) => {
   for (const h of hooks.keys) if (h(ev, p)) { stop(); return; }
   if (k === "Backspace") { stop(); p.goUp(); return; }
   if (k === "Escape") { if (p.filter) { p.filter = ""; p.rebuild(); } else if (p.sel.size) { p.sel.clear(); p.refreshSel(); } else if (focusMode()) setFocusMode(false); return; }
-  if (c && lk === "a") { stop(); p.selectAll(); return; }
   if (ev.ctrlKey && ev.shiftKey && lk === "a") { stop(); p.invertSel(); return; }
+  if (c && lk === "a") { stop(); p.selectAll(); return; }
   // Type-to-filter: printable keys go to the filter box.
   if (k.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey && k !== " ") filterEl.focus();
 });
@@ -386,6 +459,7 @@ export async function start(initial: { loc: string; select?: string }[]) {
   // bare (e.g. by D-Bus activation), reuse that untouched home tab instead of stacking a second one.
   // window-scoped: the backend picks which window gets each request (the one used last)
   getCurrentWebviewWindow().listen<{ targets: { loc: string; select: string | null }[]; properties: string[] }>("open", ({ payload }) => {
+    closeOffer();
     payload.targets.forEach((t, i) => {
       const fresh = bare && i === 0 && tabs.length === 1 && performance.now() - started < 3000 && pane().loc === HOME && !pane().back.length;
       if (fresh) pane().navigate(t.loc, false, t.select ?? undefined);
@@ -396,4 +470,13 @@ export async function start(initial: { loc: string; select?: string }[]) {
   listen<string[]>("fs-change", ({ payload }) => allPanes().forEach((p) => p.onFsChange(payload)));
   for (const t of initial) newTab(t.loc, true, t.select);
   $("app").hidden = false;
+  // a plain launch of the first window: offer to bring back what was open when the app last closed
+  if (bare && !restored) invoke<WinState[] | null>("session_take").then((ws) => ws && offerRestore(ws));
+}
+let restored = false;
+/** A window opened from a saved session. */
+export async function startSession(st: WinState) {
+  restored = true;
+  await start([]);
+  openState(st);
 }

@@ -37,6 +37,12 @@ use tauri::{async_runtime::spawn_blocking, AppHandle, Emitter, Manager, State, W
 struct Watched(Mutex<(RecommendedWatcher, HashSet<PathBuf>, HashMap<String, HashSet<PathBuf>>)>);
 /// Label of the browser window used last: D-Bus "Show in folder" requests go there.
 struct LastWin(Mutex<String>);
+/// Each browser window's tabs (reported by the window); saved to session.json when the last one closes.
+struct Sessions(Mutex<Vec<(String, Value)>>);
+
+fn session_file() -> PathBuf {
+    settings::dir().join("session.json")
+}
 struct Settings(Mutex<Map<String, Value>>);
 
 type R<T> = Result<T, String>;
@@ -369,8 +375,35 @@ fn is_browser(label: &str) -> bool {
 /// Open another browser window (same process: clipboard, jobs and tags stay shared) showing `targets`.
 /// Wayland compositors map it on the workspace you're on.
 fn new_window(app: &AppHandle, targets: Vec<listing::Target>) {
+    open_browser(app, format!("targets={}", url_arg(&serde_json::to_string(&targets).unwrap_or_default())));
+}
+
+/// A browser window restored from a saved session (its tabs and split views).
+#[tauri::command]
+fn open_session_window(app: AppHandle, state: Value) {
+    open_browser(&app, format!("session={}", url_arg(&state.to_string())));
+}
+
+#[tauri::command]
+fn session_update(state: Value, window: tauri::Window, s: State<Sessions>) {
+    let mut g = s.0.lock().unwrap();
+    match g.iter_mut().find(|(l, _)| l == window.label()) {
+        Some(e) => e.1 = state,
+        None => g.push((window.label().to_owned(), state)),
+    }
+}
+
+/// The session saved when the app last closed (and forget it: it's restored once, or declined).
+#[tauri::command]
+fn session_take() -> Option<Value> {
+    let text = std::fs::read_to_string(session_file()).ok()?;
+    let _ = std::fs::remove_file(session_file());
+    serde_json::from_str(&text).ok()
+}
+
+fn open_browser(app: &AppHandle, query: String) {
     let label = format!("win-{}", WIN_N.fetch_add(1, Ordering::Relaxed));
-    let url = format!("index.html?targets={}", url_arg(&serde_json::to_string(&targets).unwrap_or_default()));
+    let url = format!("index.html?{query}");
     let a = app.clone();
     let _ = app.run_on_main_thread(move || {
         let title = if isolated() { "WCTEST Whale Cabinet" } else { "Whale Cabinet" };
@@ -964,6 +997,18 @@ fn main() {
         .on_window_event(|w, ev| match ev {
             tauri::WindowEvent::Focused(true) if is_browser(w.label()) => *w.state::<LastWin>().0.lock().unwrap() = w.label().to_owned(),
             tauri::WindowEvent::Destroyed => {
+                if is_browser(w.label()) {
+                    // the last browser window closing = the app closing: keep every window's tabs for next time
+                    let others = w.app_handle().webview_windows().keys().any(|l| is_browser(l) && l != w.label());
+                    let st = w.state::<Sessions>();
+                    let mut g = st.0.lock().unwrap();
+                    if !others && !g.is_empty() {
+                        let all: Vec<&Value> = g.iter().map(|(_, v)| v).collect();
+                        let _ = std::fs::create_dir_all(settings::dir());
+                        let _ = std::fs::write(session_file(), serde_json::to_string(&all).unwrap_or_default());
+                    }
+                    g.retain(|(l, _)| l != w.label());
+                }
                 let st = w.state::<Watched>();
                 let mut g = st.0.lock().unwrap();
                 if g.2.remove(w.label()).is_some() {
@@ -981,6 +1026,7 @@ fn main() {
             let h = app.handle().clone();
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
             app.manage(LastWin(Mutex::new("main".into())));
+            app.manage(Sessions(Mutex::new(vec![])));
             app.manage(Settings(Mutex::new(settings::load())));
             app.manage(tags::Store::new(settings::dir()));
             // Seed the tag index from the home folder in the background (Dolphin-set tags included).
@@ -1008,7 +1054,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

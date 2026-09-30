@@ -3,7 +3,7 @@
 // highlighting. Only the newest query's answer is ever shown.
 import { esc, shown } from "./util";
 
-export type PalItem = { path: string; dir: boolean; label: string; hl?: number[]; sub?: string };
+export type PalItem = { path: string; dir: boolean; label: string; hl?: number[]; sub?: string; noIcon?: boolean };
 export type PalMode = {
   title: string;
   placeholder: string;
@@ -49,7 +49,7 @@ export function termHits(label: string, q: string) {
 
 function draw() {
   list.innerHTML = items.map((it, i) =>
-    `<div class="pal-item${i === hl ? " hl" : ""}${it.dir ? " dir" : ""}" data-i="${i}" role="option"><i class="pal-ico"></i><span class="pal-label"><bdi dir="ltr">${marked(shown(it.label), it.hl)}</bdi></span>${it.sub ? `<span class="pal-sub">${esc(it.sub)}</span>` : ""}</div>`).join("")
+    `<div class="pal-item${i === hl ? " hl" : ""}${it.dir ? " dir" : ""}" data-i="${i}" role="option">${it.noIcon ? "" : `<i class="pal-ico"></i>`}<span class="pal-label"><bdi dir="ltr">${marked(shown(it.label), it.hl)}</bdi></span>${it.sub ? `<span class="pal-sub">${esc(it.sub)}</span>` : ""}</div>`).join("")
     || `<div class="pal-empty">${input.value.trim() || mode?.title !== "Jump" ? "No matches" : "Type to search"}</div>`;
   list.querySelector(".hl")?.scrollIntoView({ block: "nearest" });
 }

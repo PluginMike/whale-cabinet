@@ -123,6 +123,14 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
 - Every folder you open is fed to `zoxide add`, so your shell's `z` learns from the file manager too.
   **Ctrl+J** (or typing `z foo` in the path bar) jumps by frecency; the sidebar's *Frequent* section lists your top folders.
 
+### Views, sessions, commands
+
+- Each folder remembers its own view mode, sort and zoom (Pictures in icons by date, code as a list by name);
+  folders you haven't touched use the defaults from Settings.
+- When the last window closes, its windows and tabs (split views included) are kept. The next plain launch
+  asks whether to bring them back; Settings → "When Whale Cabinet starts" makes it always or never.
+- **Ctrl+Shift+P** lists every command with its shortcut; type a few letters and press Enter.
+
 ### Focus mode
 
 F12 hides everything but the files (sidebar, info panel, top and status bars). Touch the top edge of the window
@@ -272,6 +280,7 @@ selects the extra copies keeping the newest, the oldest or the one in a folder y
 | Ctrl+P | Quick open (fuzzy, whole home) |
 | Ctrl+J | Jump to a frequent folder (zoxide); also `z foo` in the path bar |
 | Ctrl+N | New window |
+| Ctrl+Shift+P | Action palette (every command) |
 | F12 | Focus mode |
 | Ctrl+Q | Close window |
 | Space | Quick Look (←/→ flip through files, Esc closes) |

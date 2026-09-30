@@ -25,9 +25,11 @@ if (dialog) {
   await import("./network");
   await import("./admin");
   await import("./dupes");
+  await import("./actions");
   await initTheme(app.applySettings);
   // extra windows get their targets in the URL; the first one reads argv
   const targets: { loc: string; select: string | null }[] = q.has("targets") ? JSON.parse(q.get("targets")!) : await invoke("start_args");
-  await app.start(targets.map((t) => ({ loc: t.loc, select: t.select ?? undefined })));
+  if (q.has("session")) await app.startSession(JSON.parse(q.get("session")!));
+  else await app.start(targets.map((t) => ({ loc: t.loc, select: t.select ?? undefined })));
   if (import.meta.env.DEV && !q.has("targets") && (await invoke<boolean>("selftest", {}))) import("./selftest");
 }

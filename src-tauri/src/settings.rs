@@ -4,6 +4,12 @@ use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 
 pub fn dir() -> PathBuf {
+    // test runs (WC_SELFTEST) keep their own settings, tag index and session, never touching the user's
+    if crate::isolated() {
+        if let Some(d) = std::env::var_os("WC_SELFTEST") {
+            return PathBuf::from(d).join("config");
+        }
+    }
     dirs::config_dir().unwrap_or_default().join("whale-cabinet")
 }
 
@@ -21,7 +27,8 @@ pub fn defaults() -> Map<String, Value> {
         "zoom": 1.0,               // item size (1.0 = the default "large" cabinet)
         "folderDblClick": "open",  // open (Windows style) | expand (pull out inline)
         "infoWidth": 420,          // info panel width, px (drag its edge)
-        "terminal": ""             // empty = auto-detect
+        "terminal": "",            // empty = auto-detect
+        "restoreSession": "ask"    // ask | always | never — reopen last windows and tabs on a plain launch
     })
     .as_object()
     .unwrap()

@@ -26,6 +26,10 @@ export interface Host {
   rowScale(loc: string): number;
   /** Sort a location opens with (e.g. "rank" for ranked views). */
   defaultSort(loc: string): string | undefined;
+  /** View a folder opens with: what was last used there, else the defaults. */
+  folderView(loc: string): { view: View; sortKey: string; asc: boolean; zoom: number } | undefined;
+  /** The user changed this pane's view, sort or zoom (remember it for the folder). */
+  viewChanged(p: Pane): void;
   /** git state letter (C M S U I) for badges. */
   git(e: Entry): string | undefined;
   syncWatch(): void;
@@ -78,6 +82,7 @@ export class Pane {
       if (!ev.ctrlKey) return;
       ev.preventDefault();
       this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.1 : 1 / 1.1));
+      this.host.viewChanged(this);
     }, { passive: false });
   }
 
@@ -198,8 +203,13 @@ export class Pane {
     if (loc === this.loc) { if (select) { this.sel.clear(); this.sel.add(select); this.focus = this.anchor = select; this.scrollTo(select); this.refreshSel(); } return; }
     if (push && this.loc) { this.back.push(this.loc); this.fwd.length = 0; }
     this.loc = loc;
-    const ds = this.host.defaultSort(loc);
+    const ds = this.host.defaultSort(loc), fv = isFolder(loc) ? this.host.folderView(loc) : undefined;
     if (ds) this.sortKey = ds;
+    else if (fv) {
+      this.sortKey = fv.sortKey; this.asc = fv.asc;
+      if (fv.view !== this.view) { this.view = fv.view; this.el.dataset.view = fv.view; }
+      if (fv.zoom !== this.zoom) { this.zoom = fv.zoom; this.el.style.setProperty("--z", String(fv.zoom)); }
+    }
     else if (isFolder(loc) && this.sortKey === "rank") this.sortKey = "name"; // relevance only means something in ranked views
     this.cache.clear(); this.expanded.clear(); this.sel.clear();
     this.filter = "";
