@@ -48,7 +48,9 @@ export const hooks: {
   defaultView: Record<string, View>;
   /** per location scheme: the whole context menu (menu.ts Item[]) for its items */
   locMenu: Record<string, (p: Pane, es: Entry[]) => any[]>;
-} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {}, defaultView: {}, locMenu: {}, menuExtra: [] };
+  /** per location scheme: files dropped / pasted into one of its locations */
+  dropInto: Record<string, (loc: string, paths: string[]) => void>;
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {}, defaultView: {}, locMenu: {}, dropInto: {}, menuExtra: [] };
 
 export const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 

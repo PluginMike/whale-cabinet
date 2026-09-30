@@ -22,7 +22,7 @@ PY
 # a demo plugin for the plugins suite: badges under play/, a demo: location with two "photos", search, actions
 mkdir -p "$T/plugins/demo" && cp src-tauri/icons/32x32.png "$T/plugins/demo/thumb.png"
 cat > "$T/plugins/demo/plugin.json" <<'JSON'
-{"title": "Demo", "description": "Test plugin", "exec": "demo.py", "badges": true, "scheme": "demo", "search": true,
+{"title": "Demo", "description": "Test plugin", "exec": "demo.py", "badges": true, "scheme": "demo", "search": true, "delete": true, "upload": true,
  "settings": [{"key": "url", "label": "URL"}],
  "actions": [{"id": "hello", "label": "Say hello", "roots": true}, {"id": "img", "label": "Images only", "mime": ["image/*"], "roots": true},
              {"id": "own", "label": "Own thing", "own": true}]}
@@ -44,6 +44,7 @@ def handle(m, a):
     if m == "fetch": dst = os.path.join(cache, os.path.basename(a["path"])); shutil.copy(HERE + "/thumb.png", dst); return {"file": dst}
     if m == "badges": return {p: {"text": "✓", "title": "Synced", "state": "ok"} for p in a["paths"]}
     if m == "action": open(T + "/acted", "w").write(a["id"] + " " + " ".join(a["paths"])); say({"event": "badges"}); return {"message": "done " + a["id"]}
+    if m in ("delete", "upload"): open(T + "/" + m + "d", "w").write(a.get("loc", "") + " " + " ".join(a.get("paths") or a.get("files"))); return {"message": m + " ok"}
     if m == "search": return {"entries": [e for e in photos() if a["q"].lower() in e["name"]], "loc": "demo:/album"}
     raise Exception("unknown " + m)
 def run(r):

@@ -70,6 +70,12 @@ pub struct Manifest {
     /// answers "search" (palette)
     #[serde(default)]
     pub search: bool,
+    /// its items can be deleted ("delete")
+    #[serde(default)]
+    pub delete: bool,
+    /// files can be pasted / dropped into its locations ("upload")
+    #[serde(default)]
+    pub upload: bool,
     /// SVG path data for its sidebar section
     #[serde(default)]
     pub icon: String,

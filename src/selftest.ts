@@ -202,6 +202,14 @@ suites.plugins = async (base) => {
   const pl = await import("./plugins");
   const got = await pl.fetchFiles(["demo:/p/1/pic 1.png"]);
   check("fetch downloads to the cache", (await invoke<boolean[]>("paths_exist", { paths: got }))[0] === true, got[0]);
+  const marker = async (n: string) => { for (let i = 0; i < 50; i++) { const t = (await invoke<{ text: string }>("read_text", { path: `${base}/${n}`, max: 1000 }).catch(() => ({ text: "" }))).text; if (t) return t; await sleep(100); } return ""; };
+  p().selectPaths(["demo:/p/0/pic 0.png"]); key("Delete");
+  check("Del asks first", (await until(() => !!q(".modal"))) >= 0);
+  q<HTMLElement>(".modal .danger, .modal [data-v='1']")?.click();
+  check("…then deletes through the plugin", (await marker("deleted")) === " demo:/p/0/pic 0.png");
+  await invoke("clip_set", { paths: [`${base}/play/a.md`], cut: false });
+  key("v", { ctrlKey: true });
+  check("Ctrl+V uploads into the location", (await marker("uploadd")) === `demo:/ ${base}/play/a.md`);
   const r = await (await import("./palette")).modes["plugin:demo"].query("pic 1", "");
   check("palette search", r.items.length === 1 && !!r.items[0].img, JSON.stringify(r.items));
 

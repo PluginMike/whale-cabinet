@@ -1,0 +1,39 @@
+{
+  "title": "Immich",
+  "description": "Browse your Immich photos (timeline, albums, favorites), smart-search them, upload into them and delete from them.",
+  "exec": "immich.py",
+  "scheme": "immich",
+  "search": true,
+  "icon": "M3 5h18v14H3z M3 16l5-5 4 4 3-3 6 6 M15.5 9.5h.01",
+  "settings": [
+    {
+      "key": "url",
+      "label": "Server URL",
+      "placeholder": "https://photos.example.com"
+    },
+    {
+      "key": "apikey",
+      "label": "API key",
+      "secret": true,
+      "placeholder": "Account Settings → API Keys (asset.read, asset.view, asset.download, album.read, timeline.read; asset.upload, albumAsset.create, asset.update, asset.delete to change things)"
+    }
+  ],
+  "actions": [
+    {
+      "id": "web",
+      "label": "Open in Immich",
+      "own": true
+    },
+    {
+      "id": "upload",
+      "label": "Upload to Immich",
+      "mime": [
+        "image/*",
+        "video/*"
+      ],
+      "multi": true
+    }
+  ],
+  "delete": true,
+  "upload": true
+}

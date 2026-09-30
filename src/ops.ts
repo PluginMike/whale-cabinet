@@ -5,7 +5,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { startDrag as nativeDrag } from "@crabnebula/tauri-plugin-drag";
 import { $, Entry, invoke, esc, fmtSize, baseName, parentOf, joinPath, shown } from "./util";
-import { hooks, pane, allPanes, flash, HOME, host, tab } from "./app";
+import { hooks, pane, allPanes, flash, HOME, host, tab, scheme } from "./app";
 import { Pane, isFolder } from "./pane";
 
 type Undo = { kind: "move"; pairs: [string, string][] } | { kind: "trash"; paths: string[] } | { kind: "restore"; paths: string[]; since: number };
@@ -254,7 +254,9 @@ hooks.keys.push((ev, p) => {
 });
 
 // ---------- drag & drop ----------
-type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag" | "place" | "shelf"; path: string };
+type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag" | "place" | "shelf" | "plugin"; path: string };
+/** a plugin location that takes files (uploads) */
+const intoPlugin = (el: HTMLElement, loc: string): Target | null => (hooks.dropInto[scheme(loc)] ? { el, kind: "plugin", path: loc } : null);
 function targetAt(x: number, y: number): Target | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   if (!el) return null;
@@ -265,13 +267,13 @@ function targetAt(x: number, y: number): Target | null {
   const tag = el.closest<HTMLElement>(".tagrow[data-tag]");
   if (tag) return { el: tag, kind: "tag", path: tag.dataset.tag! };
   const drawer = el.closest<HTMLElement>(".drawer[data-p]");
-  if (drawer) return drawer.dataset.p === "trash:/" ? { el: drawer, kind: "trash", path: "" } : isFolder(drawer.dataset.p!) ? { el: drawer, kind: "dir", path: drawer.dataset.p! } : null;
+  if (drawer) return drawer.dataset.p === "trash:/" ? { el: drawer, kind: "trash", path: "" } : isFolder(drawer.dataset.p!) ? { el: drawer, kind: "dir", path: drawer.dataset.p! } : intoPlugin(drawer, drawer.dataset.p!);
   const view = allPanes().find((p) => p.el.contains(el));
   if (!view) return null;
   const item = el.closest<HTMLElement>(".item");
   if (item) { const e = view.rows[+item.dataset.i!]?.e; if (e?.dir && !e.trashId) return { el: item, kind: "dir", path: e.path }; }
   if (view.loc === "trash:/") return { el: view.scroller, kind: "trash", path: "" };
-  return isFolder(view.loc) ? { el: view.scroller, kind: "dir", path: view.loc } : null;
+  return isFolder(view.loc) ? { el: view.scroller, kind: "dir", path: view.loc } : intoPlugin(view.scroller, view.loc);
 }
 let over: Target | null = null;
 function hover(t: Target | null) {
@@ -281,6 +283,7 @@ function hover(t: Target | null) {
 async function dropOn(t: Target, paths: string[], copy: boolean) {
   if (t.kind === "trash") { invoke("op_trash", { items: paths }); return; }
   if (t.kind === "shelf") { invoke("shelf_add", { paths }); return; }
+  if (t.kind === "plugin") { if (!paths.some((x) => scheme(x) === scheme(t.path))) hooks.dropInto[scheme(t.path)](t.path, paths); return; }
   if (t.kind === "tag") { hooks.tagDrop?.(t.path, paths); return; }
   if (t.kind === "place") { const dirs = allPanes().flatMap((p) => p.selected()).filter((e) => e.dir && paths.includes(e.path)).map((e) => e.path); (dirs.length ? dirs : paths).forEach((d) => hooks.addPlace?.(d)); return; }
   if (paths.some((p) => t.path === p || t.path.startsWith(p + "/"))) { flash("Can't drop a folder into itself"); return; }

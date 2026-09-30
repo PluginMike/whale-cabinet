@@ -185,6 +185,8 @@ any language. Whale Cabinet starts it once (it runs as you, so the first time it
 - `badges`: a status badge for items under the roots, next to git's.
 - `scheme`: virtual locations `photos:…` — listed, with thumbnails, opened (downloaded first), dragged out, copied.
 - `search`: a palette search (Ctrl+F in its locations, or "Photos: search…" in Ctrl+Shift+P).
+- `delete`: Del (after asking) deletes its items; `upload`: files pasted (Ctrl+V) or dropped onto its locations
+  (or their sidebar entries) are handed to it.
 
 Requests are `{"id": 1, "method": "…", "params": {…}}`; answer `{"id": 1, "result": …}` or `{"id": 1, "error": "…"}`,
 in any order (so a plugin can work on several at once). Unasked messages `{"event": "badges", "paths": […]}`
@@ -199,6 +201,8 @@ in any order (so a plugin can work on several at once). Unasked messages `{"even
 | `thumb` | `path`, `size?` (`preview` = big) | `{file}` — an image file |
 | `fetch` | `path` | `{file}` — the item downloaded to a local file |
 | `search` | `q` | `{entries, loc?}` — `loc` lists all results |
+| `delete` | `paths` | `{message?}` |
+| `upload` | `loc`, `files` (local paths) | `{message?}` |
 
 An entry is `{name, path, dir?, size?, mtime? (ms), score? (sort order, highest first), thumb? (true), count?
 (a folder's "12 photos"), where?, info?: [[label, value]…]}`; its `path` is a location of the plugin's scheme.
@@ -211,6 +215,19 @@ updated live as the client syncs (it's the client's local socket, the one Dolphi
 Right-click → Nextcloud: *Share…* (the client's share dialog), *Copy Public Link* (reuses the item's public link
 or creates one; needs an app password from Nextcloud → Settings → Security in Settings → Plugins, kept in your
 keyring), *Open in Browser* (the item in the web UI). Check: `python3 plugins/nextcloud/test_nextcloud.py`.
+
+#### Immich (bundled)
+
+Settings → Plugins → Immich: your server's URL and an API key (Immich → Account Settings → API Keys; the key goes
+to your keyring). The sidebar's Immich section opens **Timeline** (a folder per month), **Albums** and
+**Favorites** as thumbnail folders, with EXIF in the info panel and Quick Look (Space) on the preview image.
+Opening a photo downloads the original (kept in `~/.cache/whale-cabinet/plugins/immich/`) and opens it with your
+app; Ctrl+C, *Copy To…* and dragging out copy the originals. **Ctrl+F** in Immich (or "Immich: search…" in
+Ctrl+Shift+P) is smart search: type what's in the picture; Enter opens a result, Shift+Enter shows all of them.
+Paste or drop files onto an Immich location to upload them (into an album: added to it; into Favorites: marked),
+or right-click local photos → Immich → *Upload to Immich*; Del moves photos to Immich's trash (it asks first).
+Reading needs asset.read/view/download, album.read, timeline.read; changing needs asset.upload, albumAsset.create,
+asset.update and asset.delete.
 
 ### Recent files
 

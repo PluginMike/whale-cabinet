@@ -6,13 +6,13 @@ import { $, Entry, invoke, esc, ext, parentOf, fmtSize, fmtDate, shown } from ".
 import { hooks, pane, allPanes, flash, newTab, scheme, dl } from "./app";
 import { Pane } from "./pane";
 import { Item } from "./menu";
-import { startDrag } from "./ops";
+import { startDrag, confirmBox } from "./ops";
 import { setupSection } from "./sidebar";
 import { modes, openPalette } from "./palette";
 import { actions } from "./actions";
 
 type Action = { id: string; label: string; mime: string[]; ext: string[]; roots: boolean; own: boolean; multi: boolean };
-type Plugin = { name: string; title: string; description: string; exec: string; settings: { key: string; label: string; secret: boolean }[]; actions: Action[]; badges: boolean; scheme: string; search: boolean; icon: string; consent: boolean | null };
+type Plugin = { name: string; title: string; description: string; exec: string; settings: { key: string; label: string; secret: boolean }[]; actions: Action[]; badges: boolean; scheme: string; search: boolean; delete: boolean; upload: boolean; icon: string; consent: boolean | null };
 type Init = { roots?: string[]; sidebar?: { title: string; loc: string }[] };
 type Badge = { text: string; title: string; state: string };
 
@@ -58,9 +58,10 @@ function register(p: Plugin) {
   hooks.locTitle![s] = (loc) => titles.get(loc) ?? p.title;
   hooks.defaultView[s] = "grid";
   hooks.defaultSort[s] = "rank"; // the plugin's own order (score), e.g. newest first
+  if (p.upload) hooks.dropInto[s] = (loc, paths) => upload(p, loc, paths);
   hooks.locMenu[s] = (pn, es) => {
     const own = p.actions.filter((a) => a.own && (a.multi || es.length === 1));
-    if (!es.length) return [{ label: "Reload", kb: "F5", act: () => pn.reload() }];
+    if (!es.length) return [...(p.upload ? [{ label: `Paste (upload to ${p.title})`, kb: "Ctrl+V", act: () => paste(p, pn.loc) }, "-"] : []), { label: "Reload", kb: "F5", act: () => pn.reload() }];
     const files = es.filter((e) => !e.dir);
     return [
       { label: "Open", kb: "Enter", act: () => (es.length === 1 && es[0].dir ? pn.navigate(es[0].path) : openItems(files)) },
@@ -68,10 +69,36 @@ function register(p: Plugin) {
       "-",
       { label: "Copy", kb: "Ctrl+C", off: !files.length, act: () => copyItems(files) },
       { label: "Copy To…", off: !files.length, act: async () => { const paths = await fetchFiles(files.map((e) => e.path)).catch((err) => { flash(String(err)); return []; }); (await import("./shelf")).sendTo(paths, false); } },
+      ...(p.upload ? [{ label: `Paste (upload to ${p.title})`, kb: "Ctrl+V", act: () => paste(p, pn.loc) }] : []),
       ...(own.length ? ["-" as const, ...own.map((a) => actionItem(p, a, es.map((e) => e.path)))] : []),
+      ...(p.delete ? ["-" as const, { label: `Delete from ${p.title}…`, kb: "Del", danger: true, off: !files.length, act: () => deleteItems(p, pn, files) }] : []),
     ];
   };
 }
+
+/** Delete plugin items (after asking); the plugin says what that means (Immich: its trash). */
+async function deleteItems(p: Plugin, pn: Pane, es: Entry[]) {
+  if (!es.length) return;
+  const what = es.length === 1 ? `“${shown(es[0].name)}”` : `${es.length} items`;
+  if (!(await confirmBox(`Delete ${what} from ${p.title}?`, "Delete", true))) return;
+  try {
+    const r = await call<{ message?: string } | null>(p.name, "delete", { paths: es.map((e) => e.path) }, 300);
+    flash(r?.message ?? `Deleted ${what}`);
+  } catch (err) { flash(String(err)); }
+  pn.reload();
+}
+/** Local files into a plugin location (upload). */
+async function upload(p: Plugin, loc: string, files: string[]) {
+  files = files.filter((f) => f.startsWith("/"));
+  if (!files.length) return;
+  flash(`Uploading ${files.length === 1 ? shown(files[0].slice(files[0].lastIndexOf("/") + 1)) : `${files.length} items`} to ${p.title}…`);
+  try {
+    const r = await call<{ message?: string } | null>(p.name, "upload", { loc, files }, 3600);
+    flash(r?.message ?? `Uploaded ${files.length} item${files.length === 1 ? "" : "s"}`);
+  } catch (err) { flash(String(err)); }
+  allPanes().filter((x) => x.loc === loc).forEach((x) => x.reload());
+}
+const paste = async (p: Plugin, loc: string) => upload(p, loc, (await invoke<{ paths: string[] }>("clip_get")).paths);
 
 async function copyItems(es: Entry[]) {
   try {
@@ -101,7 +128,9 @@ hooks.keys.unshift((ev, p) => {
   const k = ev.key, lk = k.toLowerCase(), c = ev.ctrlKey && !ev.altKey;
   if (c && lk === "c") { copyItems(p.selected().filter((e) => !e.dir)); return true; }
   if (c && lk === "f" && o.p.search) { openPalette(`plugin:${o.p.name}`); return true; }
-  if (k === "Delete" || k === "F2" || (c && ["x", "v", "d"].includes(lk)) || (ev.ctrlKey && ev.shiftKey && lk === "n")) { flash(`${o.p.title} is read-only here`); return true; }
+  if (k === "Delete" && o.p.delete) { deleteItems(o.p, p, p.selected().filter((e) => !e.dir)); return true; }
+  if (c && lk === "v" && o.p.upload) { paste(o.p, p.loc); return true; }
+  if (k === "Delete" || k === "F2" || (c && ["x", "v", "d"].includes(lk)) || (ev.ctrlKey && ev.shiftKey && lk === "n")) { flash(`Can't do that in ${o.p.title}`); return true; }
   return false;
 });
 
@@ -230,7 +259,7 @@ function sidebar() {
 // ---------- consent, starting ----------
 function ask(p: Plugin) {
   if (document.querySelector(`.toast[data-plugin="${CSS.escape(p.name)}"]`)) return;
-  const can = [p.actions.length && "right-click actions", p.badges && "status badges", p.scheme && `its own locations (${p.scheme}:)`, p.search && "search"].filter(Boolean).join(", ");
+  const can = [p.actions.length && "right-click actions", p.badges && "status badges", p.scheme && `its own locations (${p.scheme}:)`, p.search && "search", p.upload && "uploads", p.delete && "deleting its items"].filter(Boolean).join(", ");
   const t = document.createElement("div");
   t.className = "toast plugin-ask";
   t.dataset.plugin = p.name;

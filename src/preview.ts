@@ -235,6 +235,7 @@ window.addEventListener("keydown", (ev) => {
 });
 ql.addEventListener("dblclick", closeQL);
 hooks.keys.push((ev) => {
-  if (ev.key === " " && !ev.ctrlKey && !ev.altKey) { showQL(); return true; }
+  // the Quick Look key handler (registered after the app's) would see this same Space and close it again
+  if (ev.key === " " && !ev.ctrlKey && !ev.altKey) { ev.stopImmediatePropagation(); showQL(); return true; }
   return false;
 });
