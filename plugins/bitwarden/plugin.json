@@ -1,0 +1,12 @@
+{
+  "title": "Bitwarden",
+  "description": "Search your Bitwarden vault from the palette and copy passwords, usernames and TOTP codes, through rbw (the vault is unlocked by rbw's own password prompt; this plugin never sees your master password).",
+  "exec": "bitwarden.py",
+  "search": true,
+  "pick": true,
+  "hint": "Enter copy password · Shift+Enter copy username · Ctrl+Enter copy TOTP code · cleared after 30 s",
+  "settings": [
+    { "key": "url", "label": "Server URL (empty = bitwarden.com)", "placeholder": "https://vault.example.com" },
+    { "key": "email", "label": "Email", "placeholder": "you@example.com" }
+  ]
+}

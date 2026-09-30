@@ -70,6 +70,12 @@ pub struct Manifest {
     /// answers "search" (palette)
     #[serde(default)]
     pub search: bool,
+    /// search results are handed back to it ("pick", with how: open | reveal | tab) instead of opened
+    #[serde(default)]
+    pub pick: bool,
+    /// palette footer for its search (what Enter / Shift+Enter / Ctrl+Enter do)
+    #[serde(default)]
+    pub hint: String,
     /// its items can be deleted ("delete")
     #[serde(default)]
     pub delete: bool,

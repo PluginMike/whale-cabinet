@@ -68,7 +68,7 @@ run() {  # $1 = label, rest = env overrides
       *"[selftest] ACT theme-toggle"*) dms ipc call theme toggle >/dev/null 2>&1; (sleep 1.5; pin_ws) & ;;
       *"[selftest] ACT wallpaper-next"*) dms ipc call wallpaper next >/dev/null 2>&1; (sleep 1.5; pin_ws) & ;;
       *"[selftest] ACT dialog-class"*) if hyprctl clients -j | grep -q '"class": "whale-cabinet-dialog"'; then echo "[$label] PASS dialog window class is whale-cabinet-dialog"; else echo "[$label] FAIL dialog window class"; fails_extra=1; fi ;;
-      *"DONE fails="*) fails=${l##*=}; pkill -x whale-cabinet ;;
+      *"DONE fails="*) fails=${l##*=}; pkill -f "[t]arget/debug/whale-cabinet" ;;
       *"panicked"*|*"error["*) echo "$l" ;;
     esac
     [[ "$l" == *"[selftest]"* ]] && echo "[$label] ${l#*\[selftest\] }"

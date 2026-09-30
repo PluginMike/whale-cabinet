@@ -175,7 +175,8 @@ any language. Whale Cabinet starts it once (it runs as you, so the first time it
   "title": "Photos", "description": "…", "exec": "photos.py",
   "settings": [{ "key": "url", "label": "Server URL" }, { "key": "key", "label": "API key", "secret": true }],
   "actions": [{ "id": "share", "label": "Share…", "roots": true, "mime": ["image/*"], "ext": ["jpg"], "multi": true }],
-  "badges": true, "scheme": "photos", "search": true, "icon": "M4 4h16v16H4z"
+  "badges": true, "scheme": "photos", "search": true, "icon": "M4 4h16v16H4z",
+  "pick": false, "hint": "Enter open · Shift+Enter …"
 }
 ```
 
@@ -185,6 +186,8 @@ any language. Whale Cabinet starts it once (it runs as you, so the first time it
 - `badges`: a status badge for items under the roots, next to git's.
 - `scheme`: virtual locations `photos:…` — listed, with thumbnails, opened (downloaded first), dragged out, copied.
 - `search`: a palette search (Ctrl+F in its locations, or "Photos: search…" in Ctrl+Shift+P).
+- `pick`: search results go back to the plugin (`pick` with `how`: open / reveal / tab for Enter / Shift+Enter /
+  Ctrl+Enter) instead of being opened; `hint` is the palette's footer for it.
 - `delete`: Del (after asking) deletes its items; `upload`: files pasted (Ctrl+V) or dropped onto its locations
   (or their sidebar entries) are handed to it.
 
@@ -201,6 +204,7 @@ in any order (so a plugin can work on several at once). Unasked messages `{"even
 | `thumb` | `path`, `size?` (`preview` = big) | `{file}` — an image file |
 | `fetch` | `path` | `{file}` — the item downloaded to a local file |
 | `search` | `q` | `{entries, loc?}` — `loc` lists all results |
+| `pick` | `path`, `how` | `{message?}` |
 | `delete` | `paths` | `{message?}` |
 | `upload` | `loc`, `files` (local paths) | `{message?}` |
 
@@ -228,6 +232,15 @@ Paste or drop files onto an Immich location to upload them (into an album: added
 or right-click local photos → Immich → *Upload to Immich*; Del moves photos to Immich's trash (it asks first).
 Reading needs asset.read/view/download, album.read, timeline.read; changing needs asset.upload, albumAsset.create,
 asset.update and asset.delete.
+
+#### Bitwarden (bundled)
+
+Needs [rbw](https://github.com/doy/rbw) (`sudo pacman -S rbw`). Settings → Plugins → Bitwarden: your server (empty
+for bitwarden.com; a self-hosted Bitwarden or Vaultwarden URL otherwise) and email. Ctrl+Shift+P → *Bitwarden:
+search…*: type part of a name, username or folder; **Enter** copies the password, **Shift+Enter** the username,
+**Ctrl+Enter** the TOTP code. rbw's agent asks for your master password (pinentry) and keeps the vault unlocked
+for its `lock_timeout`; the plugin never sees it. Passwords and codes are copied marked sensitive and cleared
+after 30 s (unless you copied something else). Check: `python3 plugins/bitwarden/test_bitwarden.py`.
 
 ### Recent files
 

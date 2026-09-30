@@ -12,7 +12,7 @@ import { modes, openPalette } from "./palette";
 import { actions } from "./actions";
 
 type Action = { id: string; label: string; mime: string[]; ext: string[]; roots: boolean; own: boolean; multi: boolean };
-type Plugin = { name: string; title: string; description: string; exec: string; settings: { key: string; label: string; secret: boolean }[]; actions: Action[]; badges: boolean; scheme: string; search: boolean; delete: boolean; upload: boolean; icon: string; consent: boolean | null };
+type Plugin = { name: string; title: string; description: string; exec: string; settings: { key: string; label: string; secret: boolean }[]; actions: Action[]; badges: boolean; scheme: string; search: boolean; pick: boolean; hint: string; delete: boolean; upload: boolean; icon: string; consent: boolean | null };
 type Init = { roots?: string[]; sidebar?: { title: string; loc: string }[] };
 type Badge = { text: string; title: string; state: string };
 
@@ -224,14 +224,18 @@ function searchMode(p: Plugin) {
   modes[`plugin:${p.name}`] = {
     title: p.title,
     placeholder: `Search ${p.title}…`,
-    hint: "Enter open · Shift+Enter show all results · Ctrl+Enter results in a new tab",
+    hint: p.hint || "Enter open · Shift+Enter show all results · Ctrl+Enter results in a new tab",
     async query(q) {
       if (!q.trim()) return { items: [], note: "Type what you're looking for" };
-      const r = await call<{ entries: any[]; loc?: string; note?: string }>(p.name, "search", { q }, 60);
+      const r = await call<{ entries: any[]; loc?: string; note?: string }>(p.name, "search", { q }, 180);
       all = r.loc ?? "";
       return { items: entries(p.name, r.entries).map((e) => ({ path: e.path, dir: e.dir, label: e.name, sub: e.where || (e.mtime ? fmtDate(e.mtime) : ""), img: e.thumb, noIcon: !!e.thumb })), note: r.note };
     },
     pick(it, how) {
+      if (p.pick) {
+        call<{ message?: string } | null>(p.name, "pick", { path: it.path, how }, 180).then((r) => r?.message && flash(r.message)).catch((err) => flash(String(err)));
+        return;
+      }
       if (how !== "open" && all) { how === "tab" ? newTab(all, true, it.path) : pane().navigate(all, true, it.path); return; }
       if (it.dir) pane().navigate(it.path);
       else openItems([{ name: it.label, path: it.path } as Entry]);
