@@ -131,6 +131,17 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
   asks whether to bring them back; Settings → "When Whale Cabinet starts" makes it always or never.
 - **Ctrl+Shift+P** lists every command with its shortcut; type a few letters and press Enter.
 
+### Shelf, Copy To… / Move To…
+
+- **The shelf** collects files from anywhere before you do something with all of them: right-click → *Put on
+  Shelf* (Ctrl+Shift+S), or drag items (also from other apps, or from another Whale Cabinet window) onto it — it
+  shows up as a drop zone at the bottom while you drag. Then *Move here* / *Copy here* into the folder you're in,
+  *Move to…* / *Copy to…* anywhere, or drag them off it. Click to pick some (Ctrl-click for more), otherwise
+  buttons act on everything; moved items leave the shelf, *Clear* just takes them off. It's shared by all windows
+  and kept across restarts.
+- Right-click → **Copy To… / Move To…** opens a folder picker: your frequent folders (zoxide) first, then every
+  folder under home, fuzzy-matched.
+
 ### Focus mode
 
 F12 hides everything but the files (sidebar, info panel, top and status bars). Touch the top edge of the window
@@ -281,6 +292,7 @@ selects the extra copies keeping the newest, the oldest or the one in a folder y
 | Ctrl+J | Jump to a frequent folder (zoxide); also `z foo` in the path bar |
 | Ctrl+N | New window |
 | Ctrl+Shift+P | Action palette (every command) |
+| Ctrl+Shift+S | Put the selection on the shelf |
 | F12 | Focus mode |
 | Ctrl+Q | Close window |
 | Space | Quick Look (←/→ flip through files, Esc closes) |

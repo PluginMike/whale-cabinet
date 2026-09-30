@@ -508,6 +508,49 @@ fn paths_exist(paths: Vec<String>) -> Vec<bool> {
     paths.iter().map(|p| std::fs::symlink_metadata(p).is_ok()).collect()
 }
 
+// ---------- shelf: files collected from anywhere, shared by all windows, kept across restarts ----------
+
+struct Shelf(Mutex<Vec<String>>);
+fn shelf_file() -> PathBuf {
+    settings::dir().join("shelf.json")
+}
+fn shelf_changed(app: &AppHandle, list: &[String]) {
+    let _ = std::fs::create_dir_all(settings::dir());
+    let _ = std::fs::write(shelf_file(), serde_json::to_string(list).unwrap_or_default());
+    let _ = app.emit("shelf", list);
+}
+/// What's on the shelf (items that no longer exist drop off).
+#[tauri::command]
+fn shelf_get(app: AppHandle, s: State<Shelf>) -> Vec<String> {
+    let mut g = s.0.lock().unwrap();
+    let before = g.len();
+    g.retain(|p| std::fs::symlink_metadata(p).is_ok());
+    if g.len() != before {
+        shelf_changed(&app, &g);
+    }
+    g.clone()
+}
+#[tauri::command]
+fn shelf_add(paths: Vec<String>, app: AppHandle, s: State<Shelf>) {
+    let mut g = s.0.lock().unwrap();
+    for p in paths {
+        if !g.contains(&p) {
+            g.push(p);
+        }
+    }
+    shelf_changed(&app, &g);
+}
+/// Take these off the shelf (None = everything). The files themselves aren't touched.
+#[tauri::command]
+fn shelf_remove(paths: Option<Vec<String>>, app: AppHandle, s: State<Shelf>) {
+    let mut g = s.0.lock().unwrap();
+    match paths {
+        Some(ps) => g.retain(|p| !ps.contains(p)),
+        None => g.clear(),
+    }
+    shelf_changed(&app, &g);
+}
+
 // ---------- zoxide ----------
 
 #[tauri::command]
@@ -1027,6 +1070,8 @@ fn main() {
             app.manage(Watched(Mutex::new((make_watcher(h.clone()), HashSet::new(), HashMap::new()))));
             app.manage(LastWin(Mutex::new("main".into())));
             app.manage(Sessions(Mutex::new(vec![])));
+            let saved: Vec<String> = std::fs::read_to_string(shelf_file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+            app.manage(Shelf(Mutex::new(saved)));
             app.manage(Settings(Mutex::new(settings::load())));
             app.manage(tags::Store::new(settings::dir()));
             // Seed the tag index from the home folder in the background (Dolphin-set tags included).
@@ -1054,7 +1099,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

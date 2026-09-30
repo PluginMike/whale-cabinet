@@ -254,10 +254,12 @@ hooks.keys.push((ev, p) => {
 });
 
 // ---------- drag & drop ----------
-type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag" | "place"; path: string };
+type Target = { el: HTMLElement; kind: "dir" | "trash" | "tag" | "place" | "shelf"; path: string };
 function targetAt(x: number, y: number): Target | null {
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   if (!el) return null;
+  const shelf = el.closest<HTMLElement>("#shelf");
+  if (shelf) return { el: shelf, kind: "shelf", path: "" };
   const add = el.closest<HTMLElement>(".sb-add");
   if (add) return { el: add, kind: "place", path: "" };
   const tag = el.closest<HTMLElement>(".tagrow[data-tag]");
@@ -278,6 +280,7 @@ function hover(t: Target | null) {
 }
 async function dropOn(t: Target, paths: string[], copy: boolean) {
   if (t.kind === "trash") { invoke("op_trash", { items: paths }); return; }
+  if (t.kind === "shelf") { invoke("shelf_add", { paths }); return; }
   if (t.kind === "tag") { hooks.tagDrop?.(t.path, paths); return; }
   if (t.kind === "place") { const dirs = allPanes().flatMap((p) => p.selected()).filter((e) => e.dir && paths.includes(e.path)).map((e) => e.path); (dirs.length ? dirs : paths).forEach((d) => hooks.addPlace?.(d)); return; }
   if (paths.some((p) => t.path === p || t.path.startsWith(p + "/"))) { flash("Can't drop a folder into itself"); return; }
@@ -285,8 +288,11 @@ async function dropOn(t: Target, paths: string[], copy: boolean) {
   transfer(paths, t.path, !copy);
 }
 
-hooks.drag = (p, ev) => {
-  const paths = selPaths(p); if (!paths.length) return;
+hooks.drag = (p, ev) => startDrag(selPaths(p), ev);
+/** Drag these paths (from a pane or the shelf): onto folders, drawers, tags, the trash, the shelf, or out of the window. */
+export function startDrag(paths: string[], ev: MouseEvent) {
+  if (!paths.length) return;
+  document.body.classList.add("dragging");
   const ghost = document.createElement("div");
   ghost.className = "drag-ghost";
   ghost.textContent = paths.length === 1 ? shown(baseName(paths[0])) : `${paths.length} items`;
@@ -294,7 +300,7 @@ hooks.drag = (p, ev) => {
   let gone = false;
   const place = (m: MouseEvent) => { ghost.style.transform = `translate(${m.clientX + 14}px, ${m.clientY + 10}px)`; };
   place(ev);
-  const end = () => { gone = true; ghost.remove(); hover(null); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  const end = () => { gone = true; ghost.remove(); hover(null); document.body.classList.remove("dragging"); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
   const move = (m: MouseEvent) => {
     if (gone) return;
     place(m);
@@ -316,12 +322,14 @@ hooks.drag = (p, ev) => {
 // Files dropped in from other apps: ask Move / Copy like Dolphin does.
 getCurrentWebview().onDragDropEvent((e) => {
   const d = e.payload;
-  if (d.type === "leave") { hover(null); return; }
+  if (d.type === "leave") { hover(null); document.body.classList.remove("dragging"); return; }
+  if (d.type === "enter") document.body.classList.add("dragging");
   const pos = "position" in d ? d.position : null;
   const t = pos ? targetAt(pos.x / devicePixelRatio, pos.y / devicePixelRatio) : null;
   if (d.type === "over" || d.type === "enter") { hover(t); return; }
   if (d.type === "drop") {
     hover(null);
+    document.body.classList.remove("dragging");
     if (!t || !d.paths.length) return;
     if (t.kind !== "dir") { dropOn(t, d.paths, false); return; }
     hooks.dropMenu ? hooks.dropMenu(pos!.x / devicePixelRatio, pos!.y / devicePixelRatio, (copy) => dropOn(t, d.paths, copy)) : dropOn(t, d.paths, true);
