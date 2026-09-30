@@ -97,6 +97,37 @@ pub fn status(dir: &Path) -> Option<Info> {
     Some(parse(&out.stdout, &root.to_string_lossy()))
 }
 
+fn git_in(root: &Path, args: &[&str], paths: &[String]) -> Result<String, String> {
+    let o = Command::new("git").arg("-C").arg(root).args(args).arg("--").args(paths).stdin(Stdio::null()).output().map_err(|e| format!("git: {e}"))?;
+    // `git diff --no-index` exits 1 when files differ: that's the answer, not a failure
+    if o.status.success() || (args.contains(&"--no-index") && o.status.code() == Some(1)) {
+        Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(&o.stderr).lines().find(|l| !l.trim().is_empty()).unwrap_or("git failed").trim_start_matches("fatal: ").to_owned())
+    }
+}
+
+/// stage | unstage | discard (worktree changes of tracked files) for paths inside `root`.
+pub fn act(root: &Path, action: &str, paths: &[String]) -> Result<(), String> {
+    let args: &[&str] = match action {
+        "stage" => &["add"],
+        "unstage" => &["restore", "--staged"],
+        "discard" => &["restore"],
+        a => return Err(format!("unknown git action {a}")),
+    };
+    git_in(root, args, paths).map(drop)
+}
+
+/// What changed in `path` since the last commit (a new file shows whole).
+pub fn diff(root: &Path, path: &str, untracked: bool) -> Result<String, String> {
+    if untracked {
+        return git_in(root, &["diff", "--no-color", "--no-index", "/dev/null"], &[path.to_owned()]);
+    }
+    let d = git_in(root, &["diff", "--no-color", "HEAD"], &[path.to_owned()])?;
+    // a repo with no commits yet has no HEAD: compare with the index instead
+    if d.is_empty() { git_in(root, &["diff", "--no-color", "--cached"], &[path.to_owned()]) } else { Ok(d) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +174,14 @@ u UU N... 100644 100644 100644 100644 a b c src/deep/clash.rs\0\
         assert_eq!(i.files["new.txt"], 'U');
         assert_eq!(i.files["x.log"], 'I');
         assert!(status(Path::new("/proc")).is_none());
+        let f = d.join("sub/a.txt").to_string_lossy().into_owned();
+        assert!(diff(d, &f, false).unwrap().contains("+2"));
+        act(d, "stage", &[f.clone()]).unwrap();
+        assert_eq!(status(d).unwrap().files["sub/a.txt"], 'S');
+        act(d, "unstage", &[f.clone()]).unwrap();
+        act(d, "discard", &[f.clone()]).unwrap();
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "1");
+        assert!(diff(d, &d.join("new.txt").to_string_lossy(), true).is_ok());
+        assert!(act(d, "nuke", &[]).is_err());
     }
 }

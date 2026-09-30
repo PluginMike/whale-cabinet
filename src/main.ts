@@ -27,6 +27,7 @@ if (dialog) {
   await import("./dupes");
   await import("./shelf");
   await import("./usage");
+  await import("./crypt");
   await import("./actions");
   await initTheme(app.applySettings);
   // extra windows get their targets in the URL; the first one reads argv

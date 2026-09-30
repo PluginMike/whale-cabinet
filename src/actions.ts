@@ -59,6 +59,7 @@ export const actions: Action[] = [
   { label: "Copy selection to…", run: () => import("./shelf").then((m) => m.sendTo(pane().selected().map((e) => e.path), false)), when: sel },
   { label: "Move selection to…", run: () => import("./shelf").then((m) => m.sendTo(pane().selected().map((e) => e.path), true)), when: sel },
   { label: "Put selection on the shelf", kb: "Ctrl+Shift+S", run: ctrl("S", { shiftKey: true }), when: sel },
+  { label: "Encrypt selection…", run: () => import("./crypt").then((m) => m.encryptDialog(pane().selected()[0])), when: () => pane().sel.size === 1 },
   { label: "Recent files", run: () => pane().navigate("recent:/") },
   { label: "Trash", run: () => pane().navigate("trash:/") },
   { label: "Find duplicates…", run: click("#tool-dupes") },

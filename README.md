@@ -154,6 +154,16 @@ items are dimmed, and folders show the most important state inside them. The top
 ↑ahead/↓behind. One `git status` per repository, re-run when files (or the repo's `.git`) change. A dotfiles repo
 at `~` only shows real changes, not "untracked".
 
+Right-click inside a repository → **Git**: Stage, Unstage, Discard Changes (edits are undone, new files go to the
+trash; it asks first), Show Changes (the diff, highlighted) and, with meld/kdiff3 installed, Compare With Last Commit.
+
+### Encryption
+
+Right-click → **Encrypt…** makes `name.gpg` next to the item with a password (AES-256; the password goes to gpg on
+stdin, never on a command line) or to a key in your gpg keyring; folders are packed into `name.tar.gpg`. It can
+move the original to the trash afterwards. Opening a `.gpg` file decrypts it next to itself (never over an existing
+file), asking for the password — or, for key-encrypted files, gpg's own pinentry asks for your key's passphrase.
+
 ### Recent files
 
 Recent (sidebar) lists what you opened lately, grouped Today / Yesterday / This week / … with bigger rows and

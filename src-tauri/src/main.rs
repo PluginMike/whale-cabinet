@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod admin;
+mod crypt;
 mod desktop;
 mod dupes;
 mod fm1;
@@ -622,6 +623,44 @@ fn usage_drop(id: u32, paths: Option<Vec<String>>, s: State<usage::Scans>) {
     }
 }
 
+// ---------- git actions, encryption ----------
+
+#[tauri::command]
+async fn git_act(root: String, action: String, paths: Vec<String>) -> R<()> {
+    blocking(move || git::act(Path::new(&root), &action, &paths)).await?
+}
+#[tauri::command]
+async fn git_diff(root: String, path: String, untracked: bool) -> R<String> {
+    blocking(move || git::diff(Path::new(&root), &path, untracked)).await?
+}
+/// Compare a file with its last commit in an external tool (meld, kdiff3…) via git difftool.
+#[tauri::command]
+fn git_difftool(root: String, path: String) -> R<()> {
+    let tool = ["meld", "kdiff3", "kompare"].into_iter().find(|t| desktop::which(t).is_some()).ok_or("no diff tool installed (meld, kdiff3)")?;
+    desktop::spawn_detached(&["git".into(), "-C".into(), root.clone(), "difftool".into(), "-y".into(), format!("--tool={tool}"), "HEAD".into(), "--".into(), path], Path::new(&root))
+}
+#[tauri::command]
+fn has_difftool() -> bool {
+    ["meld", "kdiff3", "kompare"].into_iter().any(|t| desktop::which(t).is_some())
+}
+
+#[tauri::command]
+async fn gpg_keys() -> R<Vec<crypt::Key>> {
+    blocking(crypt::keys).await
+}
+#[tauri::command]
+async fn encrypt_item(path: String, password: Option<String>, recipients: Vec<String>) -> R<String> {
+    blocking(move || crypt::encrypt(Path::new(&path), password.as_deref(), &recipients).map(|p| p.to_string_lossy().into_owned())).await?
+}
+#[tauri::command]
+async fn is_symmetric(path: String) -> R<bool> {
+    blocking(move || crypt::is_symmetric(Path::new(&path))).await
+}
+#[tauri::command]
+async fn decrypt_item(path: String, password: Option<String>) -> R<String> {
+    blocking(move || crypt::decrypt(Path::new(&path), password.as_deref()).map(|p| p.to_string_lossy().into_owned())).await?
+}
+
 // ---------- zoxide ----------
 
 #[tauri::command]
@@ -1171,7 +1210,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, git_act, git_diff, git_difftool, has_difftool, gpg_keys, encrypt_item, is_symmetric, decrypt_item, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

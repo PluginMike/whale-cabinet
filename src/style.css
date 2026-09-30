@@ -568,3 +568,11 @@ body.dragging #shelf.empty { display: block; }
 .us-size, .us-pct { text-align: right; font-variant-numeric: tabular-nums; }
 .us-pct { opacity: .6; }
 .us-tip { position: fixed; z-index: 61; pointer-events: none; background: var(--front); color: var(--on-body); border: 1px solid var(--divider); border-radius: calc(var(--radius) * .5); padding: 5px 9px; font-size: .9em; box-shadow: 0 8px 20px -8px rgb(0 0 0 / .5); }
+
+/* ---------- diff view ---------- */
+.diffview .modal-box { width: min(1100px, 94vw); max-width: none; height: min(80vh, 900px); display: flex; flex-direction: column; padding: 12px 14px; }
+.dv-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.dv-head span { opacity: .65; font-size: .9em; flex: 1; }
+.dv-head button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 3px 12px; cursor: pointer; }
+.dv-body { flex: 1; min-height: 0; overflow: auto; border-radius: calc(var(--radius) * .5); }
+.dv-body pre { margin: 0; padding: 10px 12px; background: var(--paper); color: var(--on-paper); font-size: .88em; line-height: 1.45; min-height: 100%; }
