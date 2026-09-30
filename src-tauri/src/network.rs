@@ -1,7 +1,7 @@
 //! Network locations through gvfs: `gio mount` (driven in a PTY so its User/Domain/Password and host-key
 //! prompts can be answered from the UI), then browsed as a normal folder via the gvfs FUSE path that
 //! `gio info` reports. SSH hosts come from ~/.ssh/config; SMB shares are browsed with `gio list`; passwords
-//! can be kept in the keyring with `secret-tool` (libsecret). Needs gvfs (+ gvfs-smb / gvfs-dav / gvfs-nfs).
+//! can be kept in the keyring with `secret-tool` (libsecret). Needs gvfs (+ its smb / WebDAV / nfs backends).
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
@@ -191,8 +191,8 @@ fn friendly(uri: &str, err: &str) -> String {
     if l.contains("implement mount") || l.contains("not supported") {
         let scheme = uri.split("://").next().unwrap_or("");
         let pkg = match scheme {
-            "smb" => "gvfs and gvfs-smb",
-            "dav" | "davs" => "gvfs and gvfs-dav",
+            "smb" => "gvfs and gvfs-smb (gvfs-backends on Debian/Ubuntu)",
+            "dav" | "davs" => "gvfs and its WebDAV backend (gvfs-dnssd on Arch, gvfs-backends on Debian/Ubuntu)",
             "nfs" => "gvfs and gvfs-nfs",
             _ => "gvfs",
         };

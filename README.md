@@ -55,7 +55,7 @@ libsecret's secret-tool (remembering network passwords).
 **Arch / CachyOS / Manjaro**
 ```sh
 sudo pacman -S --needed base-devel webkit2gtk-4.1 curl wget file openssl librsvg libappindicator-gtk3 nodejs npm rustup
-sudo pacman -S --needed zoxide fd git gvfs gvfs-smb gvfs-dav gvfs-nfs polkit
+sudo pacman -S --needed zoxide fd git gvfs gvfs-smb gvfs-dnssd gvfs-nfs polkit
 sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-clipboard udisks2   # optional
 ```
 

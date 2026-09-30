@@ -23,7 +23,7 @@ command -v gio >/dev/null && ls /usr/lib/gvfsd /usr/libexec/gvfsd /usr/lib/gvfs/
 if (( ${#missing[@]} )); then
   . /etc/os-release 2>/dev/null
   case " ${ID:-} ${ID_LIKE:-} " in
-    *" arch "*) pkgs="${missing[*]}"; pkgs=${pkgs/gvfs/gvfs gvfs-smb gvfs-dav gvfs-nfs}; hint="sudo pacman -S --needed $pkgs" ;;
+    *" arch "*) pkgs="${missing[*]}"; pkgs=${pkgs/gvfs/gvfs gvfs-smb gvfs-dnssd gvfs-nfs}; hint="sudo pacman -S --needed $pkgs" ;;
     *" fedora "*|*" rhel "*) pkgs="${missing[*]}"; pkgs=${pkgs/fd/fd-find}; pkgs=${pkgs/gvfs/gvfs gvfs-smb gvfs-fuse}; hint="sudo dnf install $pkgs" ;;
     *" debian "*|*" ubuntu "*) pkgs="${missing[*]}"; pkgs=${pkgs/fd/fd-find}; pkgs=${pkgs/polkit/pkexec}; pkgs=${pkgs/gvfs/gvfs gvfs-backends gvfs-fuse}; hint="sudo apt install $pkgs" ;;
     *) hint="install: ${missing[*]}" ;;
