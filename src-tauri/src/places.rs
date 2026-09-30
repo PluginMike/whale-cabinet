@@ -127,10 +127,10 @@ pub fn parse(text: &str) -> Vec<Place> {
     split(text).blocks.iter().map(|b| to_place(b)).collect()
 }
 
-fn block_for(path: &str, title: &str, id: &str) -> String {
+fn block_for(href: &str, title: &str, id: &str, icon: &str) -> String {
     format!(
-        "<bookmark href=\"{}\">\n  <title>{}</title>\n  <info>\n   <metadata owner=\"http://freedesktop.org\">\n    <bookmark:icon name=\"folder\"/>\n   </metadata>\n   <metadata owner=\"http://www.kde.org\">\n    <ID>{}</ID>\n   </metadata>\n  </info>\n </bookmark>",
-        escape(&crate::jobs::to_uri(path)),
+        "<bookmark href=\"{}\">\n  <title>{}</title>\n  <info>\n   <metadata owner=\"http://freedesktop.org\">\n    <bookmark:icon name=\"{icon}\"/>\n   </metadata>\n   <metadata owner=\"http://www.kde.org\">\n    <ID>{}</ID>\n   </metadata>\n  </info>\n </bookmark>",
+        escape(href),
         escape(title),
         id
     )
@@ -140,14 +140,19 @@ pub const EMPTY: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE x
 
 /// Add a folder bookmark at `index` (None = end). No-op if it's already there.
 pub fn add(text: &str, path: &str, title: &str, index: Option<usize>) -> String {
+    add_href(text, &crate::jobs::to_uri(path), title, index, "folder")
+}
+
+/// Add a bookmark for any URL (network locations use `folder-remote`, like Dolphin).
+pub fn add_href(text: &str, href: &str, title: &str, index: Option<usize>, icon: &str) -> String {
     let mut d = split(if text.trim().is_empty() { EMPTY } else { text });
-    let href = crate::jobs::to_uri(path);
+    let href = href.to_owned();
     if d.blocks.iter().any(|b| unescape(attr(b, "href").unwrap_or("")) == href) {
         return join(&d);
     }
     let id = format!("{}/{}", crate::ops::now_secs(), d.blocks.len());
     let at = index.unwrap_or(d.blocks.len()).min(d.blocks.len());
-    d.blocks.insert(at, block_for(path, title, &id));
+    d.blocks.insert(at, block_for(&href, title, &id, icon));
     join(&d)
 }
 

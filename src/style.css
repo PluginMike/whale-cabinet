@@ -458,3 +458,21 @@ body.is-dialog { background: var(--panel); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- network ---------- */
+.modal-box.wide { width: min(560px, 92vw); max-width: none; display: flex; flex-direction: column; gap: 8px; }
+.modal-box h3 { margin: 0 0 4px; font-size: 1.1em; }
+.modal-box label { display: flex; align-items: center; gap: 8px; }
+.modal-box label.full input { flex: 1; }
+.modal-box input:not([type]), .modal-box input[type="password"] { height: 30px; padding: 0 8px; min-width: 0; }
+.modal-box .row2 { display: flex; gap: 12px; } .modal-box .row2 label { flex: 1; } .modal-box .row2 input { flex: 1; }
+.modal-box .mini { margin: 6px 0 0; display: flex; align-items: center; gap: 8px; }
+.modal-box .why { margin: 0; font-size: .92em; opacity: .85; }
+.modal-box .hint { opacity: .7; font-size: .9em; }
+.chips, .found { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: 12px; padding: 2px 10px; cursor: pointer; font-size: .9em; transition: background-color .15s; }
+.chip-btn:hover { background: color-mix(in srgb, var(--accent) 20%, var(--paper)); }
+.linkish { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 1em; text-transform: none; letter-spacing: 0; }
+.modal-box .btns button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 4px 12px; cursor: pointer; }
+.modal-box .btns button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.modal-box .err { margin: 0; color: var(--danger); font-size: .92em; }

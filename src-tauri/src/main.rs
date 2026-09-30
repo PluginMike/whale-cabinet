@@ -7,6 +7,7 @@ mod git;
 mod jobs;
 mod listing;
 mod mounts;
+mod network;
 mod ops;
 mod places;
 mod preview;
@@ -685,6 +686,61 @@ fn watch_places(app: AppHandle) {
     });
 }
 
+// ---------- network (gvfs) ----------
+
+#[derive(Serialize)]
+struct NetState {
+    saved: Vec<places::Place>,
+    mounted: Vec<network::Mounted>,
+    ssh_hosts: Vec<String>,
+    gio: bool,
+    keyring: bool,
+}
+
+#[tauri::command]
+async fn net_state() -> R<NetState> {
+    blocking(|| NetState {
+        saved: places::parse(&places::read()).into_iter().filter(|p| network::is_remote(&p.href) && !p.hidden).collect(),
+        mounted: network::mounted(),
+        ssh_hosts: network::ssh_hosts(),
+        gio: desktop::which("gio").is_some(),
+        keyring: desktop::which("secret-tool").is_some(),
+    })
+    .await
+}
+
+/// Mount a network location and return the folder to browse. A missing password is taken from the keyring;
+/// with `remember`, a password that worked is stored there.
+#[tauri::command]
+async fn net_mount(uri: String, user: String, domain: String, password: String, trust: bool, remember: bool) -> R<String> {
+    blocking(move || {
+        let password = if password.is_empty() { network::saved_password(&uri).unwrap_or_default() } else { password };
+        let path = network::mount(&uri, &network::Creds { user, domain, password: password.clone(), trust })?;
+        if remember && !password.is_empty() {
+            network::save_password(&uri, &password)?;
+        }
+        Ok(path)
+    })
+    .await?
+}
+#[tauri::command]
+async fn net_unmount(uri: String) -> R<()> {
+    blocking(move || network::unmount(&uri)).await?
+}
+#[tauri::command]
+async fn net_browse(uri: String) -> R<Vec<network::Found>> {
+    blocking(move || network::browse(&uri)).await?
+}
+#[tauri::command]
+fn net_save(uri: String, title: String) -> R<()> {
+    edit_places(|t| places::add_href(&t, &uri, &title, None, "folder-remote"))
+}
+#[tauri::command]
+fn net_forget(uri: String) -> R<()> {
+    network::forget_password(&uri);
+    edit_places(|t| places::remove(&t, &uri))
+}
+
 // ---------- devices ----------
 
 #[tauri::command]
@@ -796,7 +852,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

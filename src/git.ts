@@ -2,7 +2,7 @@
 // One `git status` per repository, re-run when something in it (or its .git folder) changes.
 import { listen } from "@tauri-apps/api/event";
 import { $, Entry, invoke, esc } from "./util";
-import { hooks, pane, allPanes, host } from "./app";
+import { hooks, pane, allPanes, host, HOME } from "./app";
 import { isFolder, Pane } from "./pane";
 
 type Status = { root: string; branch: string; ahead: number; behind: number; files: Record<string, string>; dirs: Record<string, string> };
@@ -32,7 +32,10 @@ function refetch(root: string) {
 hooks.git = (e: Entry) => {
   const st = repoFor(e.path); if (!st || e.path === st.root) return;
   const rel = e.path.slice(st.root.length + 1);
-  const c = st.files[rel] ?? (e.dir ? st.dirs[rel] : undefined); if (c) return c;
+  // a dotfiles repo at ~ would mark everything untracked: there, only real changes show
+  const quiet = st.root === HOME, loud = (c?: string) => (quiet && (c === "U" || c === "I") ? undefined : c);
+  const c = loud(st.files[rel] ?? (e.dir ? st.dirs[rel] : undefined)); if (c) return c;
+  if (quiet) return;
   // inside an ignored or untracked folder
   for (let i = rel.lastIndexOf("/"); i > 0; i = rel.lastIndexOf("/", i - 1)) { const a = st.files[rel.slice(0, i)]; if (a === "I" || a === "U") return a; }
 };
