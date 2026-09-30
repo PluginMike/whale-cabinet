@@ -69,8 +69,8 @@ fn bonus(ix: &Index, rel: &str) -> u32 {
     ix.frecent.get(abs.to_str().unwrap_or("")).map_or(0, |s| ((1.0 + s).ln() * 10.0) as u32)
 }
 
-/// Best `limit` matches for `q`, best first (ties: shorter path first).
-pub fn rank(ix: &Index, q: &str, limit: usize) -> Vec<Hit> {
+/// Best `limit` matches for `q`, best first (ties: shorter path first). `kind`: 'f' files, 'd' folders, else both.
+pub fn rank(ix: &Index, q: &str, limit: usize, kind: char) -> Vec<Hit> {
     let pat = Pattern::parse(q, CaseMatching::Smart, Normalization::Smart);
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).clamp(1, 8);
     let chunk = ix.items.len() / threads + 1;
@@ -86,6 +86,9 @@ pub fn rank(ix: &Index, q: &str, limit: usize) -> Vec<Hit> {
                     let mut buf = Vec::new();
                     let mut top: Vec<(u32, usize)> = vec![];
                     for (i, it) in part.iter().enumerate() {
+                        if (kind == 'f' && it.ends_with('/')) || (kind == 'd' && !it.ends_with('/')) {
+                            continue;
+                        }
                         if let Some(sc) = pat.score(Utf32Str::new(it, &mut buf), &mut m) {
                             top.push((sc + bonus(ix, it), ci * chunk + i));
                         }
@@ -137,13 +140,13 @@ impl Fuzzy {
         });
     }
 
-    pub fn find(self: &Arc<Self>, root: PathBuf, q: &str, limit: usize, done: impl FnOnce() + Send + 'static) -> Found {
+    pub fn find(self: &Arc<Self>, root: PathBuf, q: &str, limit: usize, kind: char, done: impl FnOnce() + Send + 'static) -> Found {
         let cur = self.index.lock().unwrap().clone();
         if cur.as_ref().is_none_or(|ix| ix.built.elapsed() > STALE || ix.root != root) {
             self.refresh(root, done);
         }
         match cur {
-            Some(ix) => Found { items: rank(&ix, q, limit), total: ix.items.len(), indexing: self.building.load(Ordering::SeqCst) },
+            Some(ix) => Found { items: rank(&ix, q, limit, kind), total: ix.items.len(), indexing: self.building.load(Ordering::SeqCst) },
             None => Found { items: vec![], total: 0, indexing: true },
         }
     }
@@ -160,26 +163,27 @@ mod tests {
     #[test]
     fn ranks_fuzzy_paths_with_indices() {
         let x = ix(&["Downloads/report-final.pdf", "Documents/notes.md", "Downloads/", "src/lib/reportage.rs", "work/deep/", "work/other/"]);
-        let h = rank(&x, "dl rep", 10);
+        let h = rank(&x, "dl rep", 10, ' ');
         assert_eq!(h[0].rel, "Downloads/report-final.pdf");
         assert_eq!(h[0].path, "/h/Downloads/report-final.pdf");
         assert!(!h[0].dir);
         // "d" and "l" of Downloads, then "rep" of report
         assert!(h[0].idx.contains(&0) && h[0].idx.len() == 5, "{:?}", h[0].idx);
-        assert!(rank(&x, "notes", 10).iter().all(|h| h.rel == "Documents/notes.md"));
+        assert!(rank(&x, "notes", 10, ' ').iter().all(|h| h.rel == "Documents/notes.md"));
         // frecent folder wins a tie
-        let w = rank(&x, "work", 10);
+        let w = rank(&x, "work", 10, ' ');
         assert_eq!(w[0].rel, "work/deep/");
         assert!(w[0].dir);
-        assert!(rank(&x, "zzzq", 10).is_empty());
-        assert_eq!(rank(&x, "", 3).len(), 3, "empty query matches everything");
+        assert!(rank(&x, "zzzq", 10, ' ').is_empty());
+        assert!(rank(&x, "d", 10, 'd').iter().all(|h| h.dir) && rank(&x, "d", 10, 'f').iter().all(|h| !h.dir));
+        assert_eq!(rank(&x, "", 3, ' ').len(), 3, "empty query matches everything");
     }
 
     #[test]
     fn many_items_across_threads() {
         let items: Vec<String> = (0..50_000).map(|i| format!("d{}/file {i}.txt", i % 97)).collect();
         let x = Index { root: "/h".into(), items, frecent: HashMap::new(), built: Instant::now() };
-        let h = rank(&x, "file 4242.txt", 5);
+        let h = rank(&x, "file 4242.txt", 5, ' ');
         assert_eq!(h[0].rel, format!("d{}/file 4242.txt", 4242 % 97));
     }
 }

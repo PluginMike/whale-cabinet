@@ -71,7 +71,9 @@ pub fn parse_lsblk(json: &str) -> Vec<Device> {
     out
 }
 
-const NET_FS: [&str; 9] = ["cifs", "smb3", "nfs", "nfs4", "fuse.sshfs", "fuse.rclone", "davfs", "fuse.gvfsd-fuse", "9p"];
+// gvfs's own FUSE root (fuse.gvfsd-fuse) isn't listed: its connections show in the Network section, and
+// unmounting the root would cut every one of them.
+const NET_FS: [&str; 8] = ["cifs", "smb3", "nfs", "nfs4", "fuse.sshfs", "fuse.rclone", "davfs", "9p"];
 
 /// Network / FUSE mounts from /proc/self/mountinfo (mount point is field 5; fstype and source follow " - ").
 pub fn parse_mountinfo(text: &str) -> Vec<Device> {

@@ -41,12 +41,23 @@ for (const [k, list] of Object.entries({
 export const kindOf = (e: Entry) => KINDS[ext(e)] ?? "other";
 
 export const TAG_COLORS = ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "grey"];
-/** Colour for a `color:` tag: a preset name → its theme variable, otherwise a literal CSS colour. */
+/** Your tag definitions (settings.tagDefs): a colour per plain tag, and your own names for the nine colours. */
+export const tagDefs: { colors: Record<string, string>; names: Record<string, string> } = { colors: {}, names: {} };
+/** A preset name → its theme variable, "#hex" → itself, anything else → undefined. */
+export const cssColor = (c?: string) => (!c ? undefined : TAG_COLORS.includes(c) ? `var(--t-${c})` : /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined);
+/** Colour of a plain tag you've given one. */
+export const tagColor = (t: string) => cssColor(tagDefs.colors[t]);
+/** Label for a tag: `color:red` → your name for red (or "Red"), plain tags as they are. */
+export const tagLabel = (t: string) => {
+  if (!t.startsWith("color:")) return t;
+  const c = t.slice(6);
+  return tagDefs.names[c] || (c[0]?.toUpperCase() ?? "") + c.slice(1);
+};
+/** Item colour: its `color:` tag, else the colour of its first coloured tag. */
 export function entryColor(e: Entry): string | undefined {
   const t = e.tags?.find((t) => t.startsWith("color:"));
-  if (!t) return;
-  const c = t.slice(6);
-  return TAG_COLORS.includes(c) ? `var(--t-${c})` : /^#[0-9a-f]{3,8}$/i.test(c) ? c : undefined;
+  if (t) return cssColor(t.slice(6));
+  for (const x of e.tags ?? []) { const c = tagColor(x); if (c) return c; }
 }
 export const edgeColor = (e: Entry) => entryColor(e) ?? `var(--k-${kindOf(e)})`;
 

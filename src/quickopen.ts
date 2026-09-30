@@ -11,9 +11,10 @@ let open = false;
 modes.files = {
   title: "Open",
   placeholder: "Find a file or folder in your home…",
-  hint: "Enter open · Shift+Enter show in folder · Ctrl+Enter new tab",
-  async query(q) {
-    const r = await invoke<{ items: Hit[]; total: number; indexing: boolean }>("fuzzy_find", { q, limit: 80 });
+  hint: "Tab files/folders · Enter open · Shift+Enter show in folder · Ctrl+Enter new tab",
+  kinds: [["", "All"], ["f", "Files"], ["d", "Folders"]],
+  async query(q, kind) {
+    const r = await invoke<{ items: Hit[]; total: number; indexing: boolean }>("fuzzy_find", { q, limit: 80, kind: kind || null });
     const items = r.items.map((h) => ({ path: h.path, dir: h.dir, label: `~/${h.rel.replace(/\/$/, "")}`, hl: h.idx.map((i) => i + 2) }));
     const note = r.indexing && !r.total ? "Indexing your home folder…" : `${r.total.toLocaleString()} items indexed${r.indexing ? " · refreshing" : ""}`;
     return { items, note };

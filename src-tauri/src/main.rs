@@ -405,12 +405,13 @@ fn open_window(app: AppHandle, loc: String) {
 // ---------- quick open (Ctrl+P) ----------
 
 #[tauri::command]
-async fn fuzzy_find(q: String, limit: usize, window: tauri::Window, app: AppHandle) -> R<fuzzy::Found> {
+async fn fuzzy_find(q: String, limit: usize, kind: Option<String>, window: tauri::Window, app: AppHandle) -> R<fuzzy::Found> {
+    let kind = kind.and_then(|k| k.chars().next()).unwrap_or(' ');
     let root = dirs::home_dir().unwrap_or_else(|| "/".into());
     blocking(move || {
         let label = window.label().to_owned();
         let a = app.clone();
-        app.state::<std::sync::Arc<fuzzy::Fuzzy>>().find(root, &q, limit, move || {
+        app.state::<std::sync::Arc<fuzzy::Fuzzy>>().find(root, &q, limit, kind, move || {
             let _ = a.emit_to(label.as_str(), "fuzzy-ready", ());
         })
     })

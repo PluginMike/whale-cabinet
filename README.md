@@ -118,7 +118,8 @@ scripts/smoke.sh               # launches the app: end-to-end UI run against a t
   The list comes from `fd` (hidden and git-ignored files skipped) and is ranked by nucleo, the fuzzy matcher from
   Helix; matched letters are highlighted and folders you use a lot (zoxide) rank a little higher. Enter opens,
   Shift+Enter shows the item in its folder, Ctrl+Enter opens it in a new tab.
-- **Ctrl+F** has a *Fuzzy* option: letters in order, best matches first (the Relevance sort).
+- **Ctrl+F** has a *Fuzzy* option: letters in order, best matches first (the Relevance sort), and a picker for
+  files and folders / files only / folders only. In quick open, Tab switches between All, Files and Folders.
 - Every folder you open is fed to `zoxide add`, so your shell's `z` learns from the file manager too.
   **Ctrl+J** (or typing `z foo` in the path bar) jumps by frecency; the sidebar's *Frequent* section lists your top folders.
 
@@ -215,6 +216,13 @@ selects the extra copies keeping the newest, the oldest or the one in a folder y
   and kept current as you browse and edit.
 - Edit tags, colour and rating in the info panel (autocompletes known tags; works on a multi-selection),
   or drag items onto a tag in the sidebar.
+- Your own tags can have their own colour ("Work" = blue): it shows on the item's tag dots, in the sidebar and
+  menus, and colours the item's edge when it has no colour of its own. Right-click → Tags → *New Tag…* creates
+  one (name + colour) and applies it to the selection.
+- *Manage tags…* (bottom of the sidebar's Tags section, or right-click a tag) renames, recolours and deletes
+  tags — renaming or deleting updates every indexed item that has it — and lets you give the nine colours your
+  own names (red = "Urgent"). Tag colours and colour names live in Whale Cabinet's settings; the files keep
+  plain tag names, so Dolphin still reads them.
 
 ### Data safety
 

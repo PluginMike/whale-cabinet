@@ -1,5 +1,5 @@
 // One file view (a tab can hold two for split view): location, history, listing, selection, virtualized rendering.
-import { Entry, invoke, esc, shown, ext, parentOf, fmtSize, fmtDate, edgeColor, entryColor, collator, kindOf } from "./util";
+import { Entry, invoke, esc, shown, ext, parentOf, fmtSize, fmtDate, edgeColor, entryColor, collator, kindOf, tagColor } from "./util";
 
 export type View = "cabinet" | "compact" | "grid";
 /** `head` rows are group headers (Recent: "Today", duplicates: "3 copies") — never selectable. */
@@ -272,7 +272,7 @@ export class Pane {
       const name = `<span class="name grab">${esc(shown(e.name))}</span>`;
       const thumb = !e.dir ? this.host.thumb(e) : undefined;
       const badge = `<span class="badge">${esc((ext(e) || e.special).slice(0, 5)) || "—"}</span>`;
-      const tags = e.tags?.filter((t) => !t.startsWith("color:")).length ? `<span class="tagdots">${e.tags!.filter((t) => !t.startsWith("color:")).slice(0, 3).map((t) => `<i title="${esc(t)}"></i>`).join("")}</span>` : "";
+      const tags = e.tags?.filter((t) => !t.startsWith("color:")).length ? `<span class="tagdots">${e.tags!.filter((t) => !t.startsWith("color:")).slice(0, 3).map((t) => `<i title="${esc(t)}"${tagColor(t) ? ` style="background:${tagColor(t)}"` : ""}></i>`).join("")}</span>` : "";
       const size = e.dir ? (e.trashId ? "" : this.host.count(e) ?? "") : e.special || e.broken ? "" : fmtSize(e.size);
       // virtual views (search, tags, trash) mix folders: show where each item lives
       const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";

@@ -1,10 +1,10 @@
 // Context menu (right-click, Menu key, Shift+F10) with Open With, New, clipboard, archives, colour/tags,
 // trash and Properties; also the Move/Copy prompt for files dropped in from other apps.
-import { Entry, invoke, esc, baseName, assetUrl, TAG_COLORS } from "./util";
+import { Entry, invoke, esc, baseName, assetUrl, TAG_COLORS, tagLabel, tagColor } from "./util";
 import { hooks, pane, flash, toggleHidden, host, newTab } from "./app";
 import { Pane } from "./pane";
 import * as ops from "./ops";
-import { editTags } from "./tags";
+import { editTags, newTag, manageTags, plainTags, refreshTags } from "./tags";
 
 export type Item = "-" | {
   label: string; icon?: string; dot?: string; kb?: string; danger?: boolean; off?: boolean;
@@ -101,7 +101,7 @@ function colorItems(es: Entry[]): Item[] {
   const paths = es.map((e) => e.path);
   const old = es.flatMap((e) => e.tags ?? []).filter((t) => t.startsWith("color:"));
   return [
-    ...TAG_COLORS.map((c) => ({ label: c[0].toUpperCase() + c.slice(1), dot: `var(--t-${c})`, act: () => editTags(paths, [`color:${c}`], []) })),
+    ...TAG_COLORS.map((c) => ({ label: tagLabel(`color:${c}`), dot: `var(--t-${c})`, act: () => editTags(paths, [`color:${c}`], []) })),
     "-",
     { label: "Custom…", act: () => { const i = document.createElement("input"); i.type = "color"; i.onchange = () => editTags(paths, [`color:${i.value}`], []); i.click(); } },
     { label: "No Colour", off: !old.length, act: () => editTags(paths, [], old) },
@@ -109,11 +109,12 @@ function colorItems(es: Entry[]): Item[] {
 }
 async function tagItems(es: Entry[]): Promise<Item[]> {
   const paths = es.map((e) => e.path);
-  const known = (await invoke<[string, number][]>("tag_counts")).map(([t]) => t).filter((t) => !t.startsWith("color:"));
+  await refreshTags();
   const all = (t: string) => es.every((e) => e.tags?.includes(t));
-  const list: Item[] = known.map((t) => ({ label: `${all(t) ? "✓ " : ""}${t}`, act: () => (all(t) ? editTags(paths, [], [t]) : editTags(paths, [t], [])) }));
+  const list: Item[] = plainTags().map((t) => ({ label: `${all(t) ? "✓ " : ""}${t}`, dot: tagColor(t), act: () => (all(t) ? editTags(paths, [], [t]) : editTags(paths, [t], [])) }));
   if (list.length) list.push("-");
-  list.push({ label: "Edit Tags…", act: () => { const i = document.getElementById("info")!; if (i.hidden) document.dispatchEvent(new KeyboardEvent("keydown", { key: "F11" })); setTimeout(() => i.querySelector<HTMLInputElement>(".tag-editor input")?.focus(), 50); } });
+  list.push({ label: "New Tag…", act: () => newTag(paths) });
+  list.push({ label: "Manage Tags…", act: () => manageTags() });
   return list;
 }
 

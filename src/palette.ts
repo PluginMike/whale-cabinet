@@ -8,7 +8,9 @@ export type PalMode = {
   title: string;
   placeholder: string;
   hint: string;
-  query(q: string): Promise<{ items: PalItem[]; note?: string }>;
+  query(q: string, kind: string): Promise<{ items: PalItem[]; note?: string }>;
+  /** Optional filter chips (value → label), cycled with Tab; the first is the default. */
+  kinds?: [string, string][];
   /** how: "open" (Enter), "reveal" (Shift+Enter), "tab" (Ctrl+Enter) */
   pick(it: PalItem, how: "open" | "reveal" | "tab"): void;
 };
@@ -17,10 +19,18 @@ export const modes: Record<string, PalMode> = {};
 const root = document.createElement("div");
 root.id = "palette";
 root.hidden = true;
-root.innerHTML = `<div class="pal-box" role="dialog"><div class="pal-head"><span class="pal-mode"></span><input spellcheck="false" autocomplete="off"></div><div class="pal-list" role="listbox"></div><div class="pal-foot"><span class="pal-note"></span><span class="pal-hint"></span></div></div>`;
+root.innerHTML = `<div class="pal-box" role="dialog"><div class="pal-head"><span class="pal-mode"></span><input spellcheck="false" autocomplete="off"><span class="pal-kinds"></span></div><div class="pal-list" role="listbox"></div><div class="pal-foot"><span class="pal-note"></span><span class="pal-hint"></span></div></div>`;
 document.body.append(root);
 const input = root.querySelector("input")!, list = root.querySelector<HTMLElement>(".pal-list")!;
-let mode: PalMode | null = null, items: PalItem[] = [], hl = 0, seq = 0, busy = false, again = false, onClose: (() => void) | null = null;
+let mode: PalMode | null = null, items: PalItem[] = [], hl = 0, seq = 0, busy = false, again = false, onClose: (() => void) | null = null, kind = "";
+const kindsEl = root.querySelector<HTMLElement>(".pal-kinds")!;
+function drawKinds() {
+  kindsEl.innerHTML = (mode?.kinds ?? []).map(([v, l]) => `<button class="${v === kind ? "on" : ""}" data-k="${v}" tabindex="-1">${esc(l)}</button>`).join("");
+}
+kindsEl.addEventListener("mousedown", (ev) => {
+  const b = (ev.target as HTMLElement).closest<HTMLElement>("button"); if (!b) return;
+  ev.preventDefault(); kind = b.dataset.k!; drawKinds(); refresh();
+});
 
 /** Wrap highlighted character positions (code points) in <b>. */
 export function marked(label: string, idx: number[] = []) {
@@ -50,7 +60,7 @@ async function refresh() {
   busy = true;
   const my = ++seq, m = mode;
   try {
-    const r = await m.query(input.value);
+    const r = await m.query(input.value, kind);
     if (my === seq && mode === m) { items = r.items; hl = 0; root.querySelector(".pal-note")!.textContent = r.note ?? ""; draw(); }
   } catch (e) { root.querySelector(".pal-note")!.textContent = String(e); }
   busy = false;
@@ -65,6 +75,7 @@ export function openPalette(name: string, initial = "", closed?: () => void) {
   root.querySelector(".pal-hint")!.textContent = mode.hint;
   input.placeholder = mode.placeholder;
   input.value = initial;
+  kind = mode.kinds?.[0]?.[0] ?? ""; drawKinds();
   items = []; hl = 0; draw();
   root.hidden = false;
   requestAnimationFrame(() => root.classList.add("in"));
@@ -92,6 +103,11 @@ input.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") { ev.preventDefault(); closePalette(); }
   else if (ev.key === "ArrowDown") move(1);
   else if (ev.key === "ArrowUp") move(-1);
+  else if (ev.key === "Tab" && mode?.kinds?.length) {
+    ev.preventDefault();
+    const ks = mode.kinds, i = ks.findIndex(([v]) => v === kind);
+    kind = ks[(i + (ev.shiftKey ? ks.length - 1 : 1)) % ks.length][0]; drawKinds(); refresh();
+  }
   else if (ev.key === "PageDown") move(8);
   else if (ev.key === "PageUp") move(-8);
   else if (ev.key === "Enter") { ev.preventDefault(); pick(hl, ev.ctrlKey ? "tab" : ev.shiftKey ? "reveal" : "open"); }

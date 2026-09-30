@@ -31,12 +31,14 @@ pub struct Query {
     pub hidden: bool,
     /// Fuzzy name matching (nucleo), results carry a score.
     pub fuzzy: Option<Pattern>,
+    /// 'f' = files only, 'd' = folders only, anything else = both.
+    pub kind: char,
 }
 
 impl Query {
     pub fn new(text: &str, content: bool, hidden: bool) -> Self {
         let glob = !content && text.contains(['*', '?', '[']);
-        Query { text: text.to_lowercase(), glob, content, hidden, fuzzy: None }
+        Query { text: text.to_lowercase(), glob, content, hidden, fuzzy: None, kind: ' ' }
     }
     pub fn fuzzy(text: &str, hidden: bool) -> Self {
         Query { fuzzy: Some(Pattern::parse(text, CaseMatching::Smart, Normalization::Smart)), ..Query::new(text, false, hidden) }
@@ -83,6 +85,11 @@ pub fn walk(root: &Path, q: &Query, cancel: &AtomicBool, mut hit: impl FnMut(Ent
             if ft.is_dir() && !matches!(p.to_str(), Some("/proc" | "/sys" | "/dev" | "/run")) {
                 stack.push(p.clone());
             }
+            // a folder link counts as a folder
+            let is_dir = ft.is_dir() || (ft.is_symlink() && p.is_dir());
+            if (q.kind == 'f' && is_dir) || (q.kind == 'd' && !is_dir) {
+                continue;
+            }
             let score = if q.content { (ft.is_file() && content_matches(&p, &q.text)).then_some(0) } else { q.name_score(&name, &mut m, &mut buf) };
             if let Some(sc) = score {
                 if let Some(mut en) = listing::entry(&p) {
@@ -102,10 +109,11 @@ struct Hits {
 }
 
 #[tauri::command]
-pub fn search_start(id: u32, root: String, text: String, content: bool, hidden: bool, fuzzy: Option<bool>, app: AppHandle, s: State<Searches>) {
+pub fn search_start(id: u32, root: String, text: String, content: bool, hidden: bool, fuzzy: Option<bool>, kind: Option<String>, app: AppHandle, s: State<Searches>) {
     let cancel = s.register(id);
     std::thread::spawn(move || {
-        let q = if fuzzy == Some(true) && !content { Query::fuzzy(&text, hidden) } else { Query::new(&text, content, hidden) };
+        let mut q = if fuzzy == Some(true) && !content { Query::fuzzy(&text, hidden) } else { Query::new(&text, content, hidden) };
+        q.kind = kind.and_then(|k| k.chars().next()).unwrap_or(' ');
         let mut batch = vec![];
         let mut last = Instant::now();
         walk(Path::new(&root), &q, &cancel, |e| {
@@ -155,6 +163,9 @@ mod tests {
         assert_eq!(fz.len(), 1);
         assert_eq!(fz[0].0, "Report 2026.PDF");
         assert!(fz[0].1.unwrap() > 0, "fuzzy hits carry a score");
+        let kinds = |k: char| { let mut v = vec![]; walk(d, &Query { kind: k, ..Query::new("e", false, false) }, &AtomicBool::new(false), |e| v.push(e.name)); v.sort(); v };
+        assert!(kinds('d').iter().all(|n| ["deep", "er"].contains(&n.as_str())) && kinds('d').len() == 2, "{:?}", kinds('d'));
+        assert!(!kinds('f').iter().any(|n| n == "deep" || n == "er") && kinds('f').contains(&"notes.md".to_string()));
         let cancelled = AtomicBool::new(true);
         let mut n = 0;
         walk(d, &Query::new("", false, true), &cancelled, |_| n += 1);
