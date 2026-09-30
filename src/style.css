@@ -405,3 +405,13 @@ body.is-dialog { background: var(--panel); }
 .pal-foot { display: flex; gap: 12px; padding: 6px 12px; font-size: .8em; opacity: .7; border-top: 1px solid color-mix(in srgb, var(--divider) 50%, transparent); }
 .pal-hint { margin-left: auto; }
 .drawer.small { height: 40px; }
+
+/* ---------- git ---------- */
+.gitb { flex: none; font-size: .72em; font-weight: 700; min-width: 1.6em; text-align: center; padding: .1em .35em; border-radius: 4px; color: var(--paper); margin-left: auto; font-family: ui-monospace, monospace; }
+.gitb + .size { margin-left: 10px; }
+.tagdots + .gitb, .where + .gitb { margin-left: 10px; }
+.g-M { background: var(--t-orange); } .g-S { background: var(--t-green); } .g-U { background: var(--t-teal); } .g-C { background: var(--t-red); }
+.gitign .name, .gitign .badge, .gitign .thumb { opacity: .5; }
+#gitchip { flex: none; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: calc(var(--radius) * .6); background: var(--paper); color: var(--on-paper); border: 1px solid var(--divider); font-size: .92em; white-space: nowrap; }
+#gitchip b { color: var(--t-green); font-weight: 700; }
+#gitchip.dirty b { color: var(--t-orange); }

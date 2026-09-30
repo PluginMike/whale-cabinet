@@ -19,11 +19,15 @@ export interface Host {
   thumb(e: Entry): string | undefined;
   /** "12 items" for a folder, loaded lazily. */
   count(e: Entry): string | undefined;
+  /** git state letter (C M S U I) for badges. */
+  git(e: Entry): string | undefined;
   syncWatch(): void;
   flash(msg: string): void;
 }
 
 const PAD = 8;
+const GIT_MARKS: Record<string, string> = { C: "!", M: "M", S: "+", U: "?" };
+const GIT_NAMES: Record<string, string> = { C: "Git: conflict", M: "Git: modified", S: "Git: staged", U: "Git: untracked" };
 export const isFolder = (loc: string) => loc.startsWith("/");
 
 export class Pane {
@@ -227,6 +231,8 @@ export class Pane {
       if (e.hidden) cls.push("hiddenf");
       if (e.dir && this.expanded.has(e.path)) cls.push("open");
       if (this.cutSet?.has(e.path)) cls.push("cut");
+      const gs = this.host.git(e);
+      if (gs === "I") cls.push("gitign");
       let style = g.grid
         ? `transform:translate(${PAD + (i % g.cols) * g.w}px,${PAD + Math.floor(i / g.cols) * g.rowH}px);width:${g.w}px;height:${g.h}px`
         : `transform:translateY(${PAD + i * g.rowH}px);height:${g.rowH}px;--depth:${depth}`;
@@ -241,7 +247,8 @@ export class Pane {
       const size = e.dir ? (e.trashId ? "" : this.host.count(e) ?? "") : e.special || e.broken ? "" : fmtSize(e.size);
       // virtual views (search, tags, trash) mix folders: show where each item lives
       const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";
-      const meta = `${where}${tags}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
+      const gitb = gs && gs !== "I" ? `<span class="gitb g-${gs}" title="${GIT_NAMES[gs]}">${GIT_MARKS[gs]}</span>` : "";
+      const meta = `${where}${tags}${gitb}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
       if (g.grid) {
         const art = e.dir ? `<div class="gfold grab"></div>` : thumb ? `<img class="gthumb grab" src="${thumb}" loading="lazy" draggable="false">` : `<div class="gpaper grab">${badge}</div>`;
         html += `<div class="${cls.join(" ")}" data-i="${i}" style="${style}">${art}${name}</div>`;

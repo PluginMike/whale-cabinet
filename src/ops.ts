@@ -164,11 +164,7 @@ hooks.virtual!["trash:"] = async () => (await invoke<TrashEntry[]>("trash_list")
 hooks.locTitle!["trash:"] = () => "Trash";
 const trashFiles = () => `${HOME}/.local/share/Trash/files`;
 listen<string[]>("fs-change", ({ payload }) => { if (payload.some((d) => d.startsWith(trashFiles()))) allPanes().filter((p) => p.loc === "trash:/").forEach((p) => p.reload()); });
-const origSync = host.syncWatch;
-host.syncWatch = () => {
-  if (allPanes().some((p) => p.loc === "trash:/")) invoke("watch", { paths: [...new Set([...allPanes().flatMap((p) => p.watched()), trashFiles()])] });
-  else origSync();
-};
+hooks.extraWatch.push(() => (allPanes().some((p) => p.loc === "trash:/") ? [trashFiles()] : []));
 const origOpen = host.open;
 host.open = (e, p) => { if (e.trashId) { flash(`Restore it first (it was ${e.origPath})`); return; } origOpen(e, p); };
 

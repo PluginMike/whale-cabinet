@@ -31,7 +31,13 @@ export const hooks: {
   open?: (e: Entry, p: Pane) => void;
   onNavigate?: (p: Pane) => void;
   keys: ((ev: KeyboardEvent, p: Pane) => boolean)[];
-} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {} };
+  /** git state letter for an entry (badges). */
+  git?: (e: Entry) => string | undefined;
+  /** runs whenever the top bar/status is refreshed for the active pane */
+  chrome: ((p: Pane) => void)[];
+  /** extra folders to watch beyond what panes show (trash, .git dirs…) */
+  extraWatch: (() => string[])[];
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [] };
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
@@ -65,7 +71,8 @@ export const host: Host = {
   },
   thumb(e) { return hooks.thumb?.(e); },
   count(e) { return hooks.count?.(e); },
-  syncWatch() { invoke("watch", { paths: [...new Set(tabs.flatMap((t) => t.panes.flatMap((p) => p.watched())))] }); },
+  git(e) { return hooks.git?.(e); },
+  syncWatch() { invoke("watch", { paths: [...new Set([...tabs.flatMap((t) => t.panes.flatMap((p) => p.watched())), ...hooks.extraWatch.flatMap((f) => f())])] }); },
   flash,
 };
 
@@ -144,6 +151,7 @@ function chrome() {
   document.querySelectorAll<HTMLElement>(".drawer").forEach((d) => d.classList.toggle("active", d.dataset.p === p.loc));
   status(p);
   info(p);
+  hooks.chrome.forEach((f) => f(p));
   document.title = `${(window as any).WCTEST ? "WCTEST " : ""}${locTitle(p.loc)} — Whale Cabinet`;
 }
 

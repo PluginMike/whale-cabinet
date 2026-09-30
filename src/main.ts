@@ -20,6 +20,7 @@ if (dialog) {
   await import("./term");
   await import("./nav");
   await import("./quickopen");
+  await import("./git");
   await initTheme(app.applySettings);
   // extra windows get their targets in the URL; the first one reads argv
   const targets: { loc: string; select: string | null }[] = q.has("targets") ? JSON.parse(q.get("targets")!) : await invoke("start_args");
