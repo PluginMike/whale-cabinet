@@ -2,6 +2,7 @@
 
 mod admin;
 mod desktop;
+mod dupes;
 mod fm1;
 mod fuzzy;
 mod git;
@@ -417,6 +418,55 @@ async fn fuzzy_find(q: String, limit: usize, window: tauri::Window, app: AppHand
 #[tauri::command]
 async fn git_status(dir: String) -> R<Option<git::Info>> {
     blocking(move || git::status(Path::new(&dir))).await
+}
+
+// ---------- duplicates ----------
+
+#[derive(Serialize, Clone)]
+struct DupSet {
+    size: u64,
+    files: Vec<listing::Entry>,
+}
+#[derive(Serialize, Clone)]
+struct DupHits {
+    id: u32,
+    sets: Vec<DupSet>,
+    scanned: u64,
+    done: bool,
+}
+
+/// Scan `root` for identical files; sets stream to the asking window as "dupes-hits".
+#[tauri::command]
+fn dupes_start(id: u32, root: String, min_size: u64, hidden: bool, window: tauri::Window, app: AppHandle, s: State<search::Searches>) {
+    let cancel = s.register(id);
+    let label = window.label().to_owned();
+    std::thread::spawn(move || {
+        let send = |sets: Vec<DupSet>, scanned: u64, done: bool| {
+            let _ = app.emit_to(label.as_str(), "dupes-hits", DupHits { id, sets, scanned, done });
+        };
+        let (mut batch, mut last) = (vec![], std::time::Instant::now());
+        dupes::find(
+            Path::new(&root),
+            min_size,
+            hidden,
+            &cancel,
+            |n| send(vec![], n, false),
+            |size, paths| {
+                batch.push(DupSet { size, files: paths.iter().filter_map(|p| listing::entry(p)).collect() });
+                if last.elapsed() > Duration::from_millis(150) {
+                    send(std::mem::take(&mut batch), 0, false);
+                    last = std::time::Instant::now();
+                }
+            },
+        );
+        send(batch, 0, true);
+    });
+}
+
+/// Which of these paths still exist (virtual views drop the ones that are gone).
+#[tauri::command]
+fn paths_exist(paths: Vec<String>) -> Vec<bool> {
+    paths.iter().map(|p| std::fs::symlink_metadata(p).is_ok()).collect()
 }
 
 // ---------- zoxide ----------
@@ -952,7 +1002,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

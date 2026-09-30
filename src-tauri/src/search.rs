@@ -15,6 +15,14 @@ use tauri::{AppHandle, Emitter, State};
 
 #[derive(Default)]
 pub struct Searches(Mutex<HashMap<u32, Arc<AtomicBool>>>);
+impl Searches {
+    /// A cancel flag for a long-running scan (search, duplicates); `search_cancel` sets it.
+    pub fn register(&self, id: u32) -> Arc<AtomicBool> {
+        let c = Arc::new(AtomicBool::new(false));
+        self.0.lock().unwrap().insert(id, c.clone());
+        c
+    }
+}
 
 pub struct Query {
     pub text: String,
@@ -95,8 +103,7 @@ struct Hits {
 
 #[tauri::command]
 pub fn search_start(id: u32, root: String, text: String, content: bool, hidden: bool, fuzzy: Option<bool>, app: AppHandle, s: State<Searches>) {
-    let cancel = Arc::new(AtomicBool::new(false));
-    s.0.lock().unwrap().insert(id, cancel.clone());
+    let cancel = s.register(id);
     std::thread::spawn(move || {
         let q = if fuzzy == Some(true) && !content { Query::fuzzy(&text, hidden) } else { Query::new(&text, content, hidden) };
         let mut batch = vec![];

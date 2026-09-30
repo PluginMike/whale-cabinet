@@ -476,3 +476,8 @@ body.is-dialog { background: var(--panel); }
 .modal-box .btns button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 4px 12px; cursor: pointer; }
 .modal-box .btns button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .modal-box .err { margin: 0; color: var(--danger); font-size: .92em; }
+
+/* ---------- tools ---------- */
+.recrow.tool .tool-ico { width: 12px; height: 12px; border-radius: 3px; background: transparent; border: 2px solid currentColor; opacity: .7; }
+.dupe-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+#info button:disabled { opacity: .45; cursor: default; }

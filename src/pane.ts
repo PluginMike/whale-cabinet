@@ -112,7 +112,7 @@ export class Pane {
   // ---------- listing ----------
   private cmp = (a: Entry, b: Entry) => {
     // "rank" (relevance) keeps the source's scores and ignores folders-first
-    if (this.sortKey === "rank") { const r = (b.score ?? 0) - (a.score ?? 0) || collator.compare(a.name, b.name); return this.asc ? r : -r; }
+    if (this.sortKey === "rank") { const r = (b.score ?? 0) - (a.score ?? 0) || (a.group ?? 0) - (b.group ?? 0) || collator.compare(a.name, b.name); return this.asc ? r : -r; }
     if (a.dir !== b.dir) return a.dir ? -1 : 1;
     let r = 0;
     if (this.sortKey === "size") r = a.size - b.size;
