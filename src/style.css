@@ -1,5 +1,6 @@
 /* Whale Cabinet — flat filing-cabinet look. Every colour/shape is a role variable, filled live from
-   DMS (colours) and Hyprland (rounding, gaps, border) by theme.ts. Rule: no gradients, no shadows. */
+   DMS (colours) and Hyprland (rounding, gaps, border) by theme.ts. Rule: no gradients; panes stay flat,
+   only things floating above them (menus, palette, progress, modals) get a soft shadow. */
 :root {
   /* built-in cabinet palette (fallback when DMS is absent) */
   --interior: #e8e2d4;      /* drawer interior = main pane */
@@ -38,6 +39,8 @@
   --fs: 14.5px;
   --side-w: 236px;
   --info-w: 420px;
+  --soft-divider: color-mix(in srgb, var(--divider) 45%, transparent);
+  --ease: cubic-bezier(.2, .8, .2, 1);
   font-family: var(--font);
   font-size: var(--fs);
   color: var(--text);
@@ -74,7 +77,7 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 /* ---------- top bar ---------- */
 #topbar {
   grid-area: top; display: flex; gap: 6px; align-items: center;
-  padding: calc(var(--gap) * .75) var(--pad); background: var(--bar); border-bottom: 1px solid var(--divider);
+  padding: calc(var(--gap) * .75) var(--pad); background: var(--bar); border-bottom: 1px solid var(--soft-divider);
 }
 #topbar > button, #topbar > select {
   height: 34px; min-width: 34px; border: 1px solid var(--divider); border-radius: calc(var(--radius) * .6);
@@ -97,10 +100,10 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 /* ---------- sidebar: the cabinet ---------- */
 #sidebar { grid-area: side; background: var(--body); padding: var(--pad) calc(var(--gap) + 12px) var(--pad) var(--gap); overflow-y: auto; overflow-x: hidden; color: var(--on-body); }
 .section { font-size: .78em; text-transform: uppercase; letter-spacing: .08em; opacity: .75; margin: 10px 4px 8px; }
-.section:first-child { margin-top: 2px; }
+.sec:first-child .section { margin-top: 2px; }
 .drawer {
-  position: relative; height: 54px; margin-bottom: 7px; border-radius: calc(var(--radius) * .6);
-  background: var(--front); cursor: pointer; transition: transform .18s ease-out;
+  position: relative; height: 50px; margin-bottom: 6px; border-radius: calc(var(--radius) * .6);
+  background: var(--front); cursor: pointer; transition: transform .28s var(--ease), background-color .2s;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
 }
 .drawer .label {
@@ -227,7 +230,7 @@ code, pre { font-family: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
 .gthumb { width: 80%; height: 64%; object-fit: contain; border-radius: 4px; flex: none; }
 
 /* ---------- info panel ---------- */
-#info { grid-area: info; position: relative; background: var(--panel); border-left: 1px solid var(--divider); min-width: 0; min-height: 0; display: flex; }
+#info { grid-area: info; position: relative; background: var(--panel); border-left: 1px solid var(--soft-divider); min-width: 0; min-height: 0; display: flex; }
 #info-body { flex: 1; overflow-y: auto; padding: var(--pad) calc(var(--pad) * 1.4); min-width: 0; }
 #info-grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; }
 #info-grip:hover, body.resizing #info-grip { background: color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -285,7 +288,7 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 .stars .on { color: var(--t-yellow); }
 
 /* ---------- status bar ---------- */
-#status { grid-area: stat; display: flex; gap: 22px; padding: 6px var(--pad); background: var(--bar); border-top: 1px solid var(--divider); font-size: .92em; color: var(--text); min-height: 30px; align-items: center; }
+#status { grid-area: stat; display: flex; gap: 22px; padding: 6px var(--pad); background: var(--bar); border-top: 1px solid var(--soft-divider); font-size: .92em; color: var(--text); min-height: 30px; align-items: center; }
 #status span { opacity: .85; }
 #st-free { margin-left: auto; }
 #st-sel.flash { color: var(--danger); }
@@ -415,3 +418,43 @@ body.is-dialog { background: var(--panel); }
 #gitchip { flex: none; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: calc(var(--radius) * .6); background: var(--paper); color: var(--on-paper); border: 1px solid var(--divider); font-size: .92em; white-space: nowrap; }
 #gitchip b { color: var(--t-green); font-weight: 700; }
 #gitchip.dirty b { color: var(--t-orange); }
+
+/* ---------- sidebar sections (collapsible, remembered) ---------- */
+.sec .section { display: flex; align-items: center; gap: 8px; margin: 12px 2px 6px; padding: 3px 4px; border-radius: 5px; cursor: pointer; user-select: none; transition: opacity .15s, background-color .15s; }
+.sec .section:hover { opacity: 1; background: color-mix(in srgb, var(--front) 55%, transparent); }
+.sec .section svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sec .section span { flex: 1; }
+.sec-chev { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; rotate: 45deg; translate: 0 -2px; transition: rotate .22s var(--ease), translate .22s var(--ease); opacity: .7; }
+.sec.collapsed .sec-chev { rotate: -45deg; translate: -2px 0; }
+.sec-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .26s var(--ease), opacity .2s; }
+.sec-body > * { min-height: 0; overflow: visible clip; }
+.sec.collapsed .sec-body { grid-template-rows: 0fr; opacity: 0; }
+.recrow { display: flex; align-items: center; gap: 9px; padding: 5px 10px; border-radius: calc(var(--radius) * .5); cursor: pointer; font-size: .9em; transition: background-color .15s; }
+.recrow:hover { background: var(--front); }
+.recrow i { width: 8px; height: 12px; border-radius: 2px; background: var(--edge, var(--muted)); flex: none; }
+.recrow span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recrow b { font-weight: 400; opacity: .6; font-size: 11px; flex: none; }
+#recent .drawer { margin-bottom: 4px; }
+
+/* ---------- group headers (Recent timeline, duplicate sets) ---------- */
+.ghead { display: flex; align-items: flex-end; gap: 10px; padding: 0 calc(var(--pad) * 1.6) .35em; font-size: .82em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); pointer-events: none; }
+.ghead b { font-weight: 500; opacity: .7; letter-spacing: 0; }
+.ghead::after { content: ""; flex: 1; height: 1px; background: var(--soft-divider); margin-bottom: .45em; }
+.item .app { margin-left: 1.2em; opacity: .75; max-width: 9em; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- motion & polish ---------- */
+.items.enter { animation: fade-in .2s ease-out; }
+.file .paper, .folder .body { transition: background-color .15s; }
+.item:not(.sel):hover .paper { background: color-mix(in srgb, var(--accent) 8%, var(--paper)); }
+.item:not(.sel):hover .body { background: color-mix(in srgb, var(--accent) 10%, var(--folder)); }
+#topbar > button, #topbar > select, #crumbs button, .tabitem, #menu .mi, .pv-tools button, #info button { transition: background-color .15s, color .15s, border-color .15s; }
+#topbar > button:hover:not(:disabled):not(.on) { background: color-mix(in srgb, var(--accent) 14%, var(--paper)); }
+#menu, #menu .submenu { box-shadow: 0 12px 32px -10px rgb(0 0 0 / .45); animation: menu-in .12s var(--ease); transform-origin: top left; }
+@keyframes menu-in { from { opacity: 0; scale: .97; } }
+.job, .modal-box { box-shadow: 0 12px 32px -12px rgb(0 0 0 / .5); }
+.job { animation: drop-in .18s var(--ease); }
+.modal-box { animation: menu-in .14s var(--ease); }
+.tabitem { transition: background-color .15s, color .15s; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}

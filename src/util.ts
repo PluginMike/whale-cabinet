@@ -6,6 +6,8 @@ export type Entry = {
   special: string; hidden: boolean; size: number; mtime: number;
   tags?: string[];
   /** ranked views (fuzzy search, recent, duplicates): higher first */ score?: number;
+  /** recent view: last use (ms) and the app it was opened with */ used?: number; app?: string;
+  /** duplicates view: which set of identical files */ group?: number;
   /** trash view only */ trashId?: string; origPath?: string; deleted?: number;
 };
 

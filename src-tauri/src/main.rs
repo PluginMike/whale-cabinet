@@ -11,6 +11,7 @@ mod ops;
 mod places;
 mod preview;
 mod props;
+mod recent;
 mod search;
 mod settings;
 mod tags;
@@ -499,7 +500,56 @@ async fn launch_app(id: String, paths: Vec<String>, app: AppHandle) -> R<()> {
     blocking(move || {
         let apps = desktop::all_apps();
         let a = apps.get(&id).ok_or(format!("{id} not found"))?;
-        desktop::launch(a, &paths, &term)
+        desktop::launch(a, &paths, &term)?;
+        remember(&app, a, &paths);
+        Ok(())
+    })
+    .await?
+}
+
+/// Add opened files to the shared recent list (like GTK apps do), then tell the windows.
+fn remember(app: &AppHandle, a: &desktop::App, paths: &[String]) {
+    let files: Vec<&String> = paths.iter().filter(|p| Path::new(p).is_file()).collect();
+    if files.is_empty() {
+        return;
+    }
+    let mut text = recent::read();
+    for p in files {
+        text = recent::record(&text, p, &desktop::mime_of(Path::new(p)), &a.name, &a.exec, recent::now_ms());
+    }
+    if recent::write(&text).is_ok() {
+        let _ = app.emit("recent-changed", ());
+    }
+}
+
+#[derive(Serialize)]
+struct RecentEntry {
+    #[serde(flatten)]
+    entry: listing::Entry,
+    used: i64,
+    app: String,
+}
+
+/// Recently used files that still exist, newest first.
+#[tauri::command]
+async fn recent_list(limit: usize) -> R<Vec<RecentEntry>> {
+    blocking(move || {
+        recent::parse(&recent::read())
+            .into_iter()
+            .filter_map(|it| listing::entry(Path::new(&it.path)).filter(|e| !e.dir).map(|entry| RecentEntry { entry, used: it.used, app: it.app }))
+            .take(limit)
+            .collect()
+    })
+    .await
+}
+
+/// Forget some (or, with None, all) recent files.
+#[tauri::command]
+async fn recent_remove(paths: Option<Vec<String>>, app: AppHandle) -> R<()> {
+    blocking(move || {
+        recent::write(&recent::remove(&recent::read(), paths.as_deref()))?;
+        let _ = app.emit("recent-changed", ());
+        Ok(())
     })
     .await?
 }
@@ -508,6 +558,7 @@ async fn launch_app(id: String, paths: Vec<String>, app: AppHandle) -> R<()> {
 #[tauri::command]
 async fn open_default(paths: Vec<String>, app: AppHandle) -> R<()> {
     let term = term_pref(&app);
+    let app = app.clone();
     blocking(move || {
         let apps = desktop::all_apps();
         let ma = desktop::load_mimeapps();
@@ -524,6 +575,7 @@ async fn open_default(paths: Vec<String>, app: AppHandle) -> R<()> {
         }
         for (id, files) in groups {
             desktop::launch(&apps[&id], &files, &term)?;
+            remember(&app, &apps[&id], &files);
         }
         Ok(())
     })
@@ -744,7 +796,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_args, open_window, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,

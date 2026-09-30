@@ -37,7 +37,11 @@ export const hooks: {
   chrome: ((p: Pane) => void)[];
   /** extra folders to watch beyond what panes show (trash, .git dirs…) */
   extraWatch: (() => string[])[];
-} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [] };
+  /** per location scheme: group headers, row height, opening sort */
+  group: Record<string, (e: Entry) => string>;
+  rowScale: Record<string, number>;
+  defaultSort: Record<string, string>;
+} = { keys: [], info: [], infoExtra: [], virtual: {}, locTitle: {}, chrome: [], extraWatch: [], group: {}, rowScale: {}, defaultSort: {} };
 
 const scheme = (loc: string) => loc.slice(0, loc.indexOf(":") + 1);
 
@@ -72,6 +76,9 @@ export const host: Host = {
   thumb(e) { return hooks.thumb?.(e); },
   count(e) { return hooks.count?.(e); },
   git(e) { return hooks.git?.(e); },
+  groupOf(loc) { return hooks.group[scheme(loc)]; },
+  rowScale(loc) { return hooks.rowScale[scheme(loc)] ?? 1; },
+  defaultSort(loc) { return hooks.defaultSort[scheme(loc)]; },
   syncWatch() { invoke("watch", { paths: [...new Set([...tabs.flatMap((t) => t.panes.flatMap((p) => p.watched())), ...hooks.extraWatch.flatMap((f) => f())])] }); },
   flash,
 };
@@ -165,7 +172,7 @@ function renderCrumbs(p: Pane) {
 }
 
 function status(p: Pane) {
-  const top = p.rows.filter((r) => r.depth === 0);
+  const top = p.rows.filter((r) => r.depth === 0 && !r.head);
   const nd = top.filter((r) => r.e.dir).length;
   $("st-count").textContent = `${nd} folder${nd === 1 ? "" : "s"}, ${top.length - nd} file${top.length - nd === 1 ? "" : "s"}`;
   if (!$("st-sel").classList.contains("flash")) {
@@ -197,7 +204,7 @@ export function info(p = pane()) {
       dl([["Folders", String(picked.length - files.length)], ["Files", String(files.length)], ["Size", fmtSize(files.reduce((s, e) => s + e.size, 0))]]);
     hooks.infoExtra.forEach((f) => f(el, picked));
   } else {
-    const n = p.rows.filter((r) => r.depth === 0).length;
+    const n = p.rows.filter((r) => r.depth === 0 && !r.head).length;
     const pairs: [string, string][] = [["Items", String(n)], ["Location", p.loc]];
     if (p.space) pairs.push(["Free", `${fmtSize(p.space[0])} of ${fmtSize(p.space[1])}`]);
     el.innerHTML = `<div class="glyph">${glyph()}</div><h2>${esc(locTitle(p.loc))}</h2>${dl(pairs)}`;

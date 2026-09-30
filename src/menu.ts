@@ -174,6 +174,7 @@ export function fileMenu(p: Pane): Item[] {
     { label: "Compress", sub: () => compressItems(paths) },
   );
   if (archives.length && archives.length === files.length && !dirs.length) list.push({ label: "Extract Here", act: () => invoke("op_extract", { items: archives.map((e) => e.path) }) });
+  if (p.loc === "recent:/") list.push("-", { label: "Remove from Recent", act: () => invoke("recent_remove", { paths }).catch((e) => flash(String(e))) });
   list.push("-",
     { label: "Colour", sub: () => colorItems(es) },
     { label: "Tags", sub: () => tagItems(es) },

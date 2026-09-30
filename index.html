@@ -33,10 +33,13 @@
       <button id="menubtn" title="Settings">☰</button>
     </header>
     <aside id="sidebar">
-      <div class="section">Places</div><div id="places"></div>
-      <div class="section" id="freq-head" hidden>Frequent</div><div id="frequent"></div>
-      <div class="section" id="dev-head" hidden>Devices</div><div id="devices"></div>
-      <div class="section" id="tag-head" hidden>Tags</div><div id="tags"></div>
+      <section class="sec" id="sec-places" data-sec="places"><h3 class="section">Places</h3><div class="sec-body"><div id="places"></div></div></section>
+      <section class="sec" id="sec-recent" data-sec="recent"><h3 class="section">Recent</h3><div class="sec-body"><div id="recent"></div></div></section>
+      <section class="sec" id="freq-head" data-sec="frequent" hidden><h3 class="section">Frequent</h3><div class="sec-body"><div id="frequent"></div></div></section>
+      <section class="sec" id="dev-head" data-sec="devices" hidden><h3 class="section">Devices</h3><div class="sec-body"><div id="devices"></div></div></section>
+      <section class="sec" id="net-head" data-sec="network"><h3 class="section">Network</h3><div class="sec-body"><div id="network"></div></div></section>
+      <section class="sec" id="tag-head" data-sec="tags" hidden><h3 class="section">Tags</h3><div class="sec-body"><div id="tags"></div></div></section>
+      <section class="sec" id="tools-head" data-sec="tools"><h3 class="section">Tools</h3><div class="sec-body"><div id="tools"></div></div></section>
     </aside>
     <div id="center">
       <div id="tabbar" hidden></div>

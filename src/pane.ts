@@ -2,7 +2,8 @@
 import { Entry, invoke, esc, shown, ext, parentOf, fmtSize, fmtDate, edgeColor, entryColor, collator, kindOf } from "./util";
 
 export type View = "cabinet" | "compact" | "grid";
-type Row = { e: Entry; depth: number; parent: string };
+/** `head` rows are group headers (Recent: "Today", duplicates: "3 copies") — never selectable. */
+export type Row = { e: Entry; depth: number; parent: string; head?: string; n?: number };
 
 export interface Host {
   showHidden: boolean;
@@ -19,6 +20,12 @@ export interface Host {
   thumb(e: Entry): string | undefined;
   /** "12 items" for a folder, loaded lazily. */
   count(e: Entry): string | undefined;
+  /** Group label per entry for ranked views (headers between groups), if the location has groups. */
+  groupOf(loc: string): ((e: Entry) => string) | undefined;
+  /** Row height multiplier for a location (Recent shows bigger thumbnails). */
+  rowScale(loc: string): number;
+  /** Sort a location opens with (e.g. "rank" for ranked views). */
+  defaultSort(loc: string): string | undefined;
   /** git state letter (C M S U I) for badges. */
   git(e: Entry): string | undefined;
   syncWatch(): void;
@@ -81,7 +88,7 @@ export class Pane {
       const w = Math.round(156 * z), h = Math.round(168 * z);
       return { grid: true, w, h, cols: Math.max(1, Math.floor((this.scroller.clientWidth - PAD * 2) / w)), rowH: h };
     }
-    const rowH = Math.round((this.view === "compact" ? 36 : 54) * z);
+    const rowH = Math.round((this.view === "compact" ? 36 : 54) * z * this.host.rowScale(this.loc));
     return { grid: false, w: 0, h: rowH, cols: 1, rowH };
   }
   private layout() {
@@ -132,6 +139,21 @@ export class Pane {
       return any;
     };
     walk(this.loc, 0);
+    const group = this.sortKey === "rank" && this.view !== "grid" ? this.host.groupOf(this.loc) : undefined;
+    if (group) {
+      const grouped: Row[] = [];
+      let last = null as Row | null;
+      for (const r of out) {
+        const g = r.depth === 0 ? group(r.e) : null;
+        if (g !== null && g !== last?.head) {
+          last = { e: { name: g, path: `\0${g}`, dir: false, link: false, broken: false, special: "", hidden: false, size: 0, mtime: 0 }, depth: 0, parent: this.loc, head: g, n: 0 };
+          grouped.push(last);
+        }
+        if (last && r.depth === 0) last.n!++;
+        grouped.push(r);
+      }
+      out.splice(0, out.length, ...grouped);
+    }
     this.rows = out;
     this.index = new Map(out.map((r, i) => [r.e.path, i]));
     if (this.cache.has(this.loc)) for (const p of this.sel) if (!this.index.has(p)) this.sel.delete(p); // keep pre-selection until the listing lands
@@ -176,12 +198,15 @@ export class Pane {
     if (loc === this.loc) { if (select) { this.sel.clear(); this.sel.add(select); this.focus = this.anchor = select; this.scrollTo(select); this.refreshSel(); } return; }
     if (push && this.loc) { this.back.push(this.loc); this.fwd.length = 0; }
     this.loc = loc;
-    if (isFolder(loc) && this.sortKey === "rank") this.sortKey = "name"; // relevance only means something in ranked views
+    const ds = this.host.defaultSort(loc);
+    if (ds) this.sortKey = ds;
+    else if (isFolder(loc) && this.sortKey === "rank") this.sortKey = "name"; // relevance only means something in ranked views
     this.cache.clear(); this.expanded.clear(); this.sel.clear();
     this.filter = "";
     this.focus = this.anchor = select ?? "";
     if (select) this.sel.add(select);
     this.scroller.scrollTop = 0;
+    this.items.classList.remove("enter"); void this.items.offsetWidth; this.items.classList.add("enter");
     this.space = null;
     this.host.syncWatch();
     this.rebuild();
@@ -222,7 +247,11 @@ export class Pane {
     if (this.pop && performance.now() > this.pop.until) this.pop = null;
     let html = "", popN = 0;
     for (let i = first; i < last; i++) {
-      const { e, depth, parent } = this.rows[i];
+      const { e, depth, parent, head, n } = this.rows[i];
+      if (head !== undefined) {
+        html += `<div class="item ghead" data-i="${i}" style="transform:translateY(${PAD + i * g.rowH}px);height:${g.rowH}px"><span>${esc(head)}</span><b>${n}</b></div>`;
+        continue;
+      }
       const cls = ["item", e.dir ? "folder" : "file"];
       if (this.sel.has(e.path)) cls.push("sel");
       if (this.focus === e.path) cls.push("focus");
@@ -248,7 +277,7 @@ export class Pane {
       // virtual views (search, tags, trash) mix folders: show where each item lives
       const where = !isFolder(this.loc) ? `<span class="meta where">${esc(shown(parentOf(e.origPath ?? e.path)))}</span>` : "";
       const gitb = gs && gs !== "I" ? `<span class="gitb g-${gs}" title="${GIT_NAMES[gs]}">${GIT_MARKS[gs]}</span>` : "";
-      const meta = `${where}${tags}${gitb}<span class="meta size">${size}</span><span class="meta date">${fmtDate(e.deleted ?? e.mtime)}</span>`;
+      const meta = `${where}${tags}${gitb}<span class="meta size">${size}</span>${e.app ? `<span class="meta app">${esc(e.app)}</span>` : ""}<span class="meta date">${fmtDate(e.deleted ?? e.used ?? e.mtime)}</span>`;
       if (g.grid) {
         const art = e.dir ? `<div class="gfold grab"></div>` : thumb ? `<img class="gthumb grab" src="${thumb}" loading="lazy" draggable="false">` : `<div class="gpaper grab">${badge}</div>`;
         html += `<div class="${cls.join(" ")}" data-i="${i}" style="${style}">${art}${name}</div>`;
@@ -278,9 +307,10 @@ export class Pane {
   private selectRange(a: string, b: string, add: boolean) {
     const i = this.index.get(a) ?? 0, j = this.index.get(b) ?? 0;
     if (!add) this.sel.clear();
-    for (let k = Math.min(i, j); k <= Math.max(i, j); k++) this.sel.add(this.rows[k].e.path);
+    for (let k = Math.min(i, j); k <= Math.max(i, j); k++) if (!this.rows[k].head) this.sel.add(this.rows[k].e.path);
   }
   clickRow(i: number, ev: { shiftKey: boolean; ctrlKey: boolean }) {
+    if (this.rows[i].head) return;
     const p = this.rows[i].e.path;
     if (ev.shiftKey && this.anchor && this.index.has(this.anchor)) this.selectRange(this.anchor, p, ev.ctrlKey);
     else if (ev.ctrlKey) { this.sel.has(p) ? this.sel.delete(p) : this.sel.add(p); this.anchor = p; }
@@ -289,8 +319,8 @@ export class Pane {
     this.refreshSel();
   }
   selectPaths(paths: string[]) { this.sel.clear(); paths.forEach((p) => this.sel.add(p)); if (paths[0]) { this.focus = this.anchor = paths[0]; this.scrollTo(paths[0]); } this.refreshSel(); }
-  selectAll() { this.rows.forEach((r) => this.sel.add(r.e.path)); this.refreshSel(); }
-  invertSel() { for (const r of this.rows) this.sel.has(r.e.path) ? this.sel.delete(r.e.path) : this.sel.add(r.e.path); this.refreshSel(); }
+  selectAll() { this.rows.forEach((r) => { if (!r.head) this.sel.add(r.e.path); }); this.refreshSel(); }
+  invertSel() { for (const r of this.rows) if (!r.head) this.sel.has(r.e.path) ? this.sel.delete(r.e.path) : this.sel.add(r.e.path); this.refreshSel(); }
 
   // ---------- mouse ----------
   private rowAt(t: EventTarget | null) { const r = (t as HTMLElement).closest?.(".item") as HTMLElement | null; return r ? +r.dataset.i! : -1; }
@@ -364,7 +394,7 @@ export class Pane {
     let last = -1;
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const k = r * g.cols + c;
-      if (k < this.rows.length) { this.sel.add(this.rows[k].e.path); last = k; }
+      if (k < this.rows.length && !this.rows[k].head) { this.sel.add(this.rows[k].e.path); last = k; }
     }
     if (last >= 0) this.focus = this.rows[last].e.path;
     this.refreshSel();
@@ -372,6 +402,7 @@ export class Pane {
 
   private dblclick(ev: MouseEvent) {
     const i = this.rowAt(ev.target);
+    if (i >= 0 && this.rows[i].head) return;
     if (i < 0) { if (this.host.singleClick) return; if (!(ev.target as HTMLElement).closest(".item")) this.goUp(); return; }
     if ((ev.target as HTMLElement).classList.contains("chev") || this.host.singleClick) return;
     const e = this.rows[i].e;
@@ -383,6 +414,10 @@ export class Pane {
   private moveFocus(to: number, ev: KeyboardEvent) {
     if (!this.rows.length) return;
     to = Math.max(0, Math.min(this.rows.length - 1, to));
+    // step over group headers (in the direction of travel; the first row is always a header when grouped)
+    const fi = this.index.get(this.focus) ?? -1;
+    while (this.rows[to]?.head) to += to >= fi || to === 0 ? 1 : -1;
+    if (!this.rows[to]) return;
     const p = this.rows[to].e.path;
     if (ev.shiftKey) { if (!this.anchor || !this.index.has(this.anchor)) this.anchor = this.focus || p; this.selectRange(this.anchor, p, ev.ctrlKey); }
     else if (!ev.ctrlKey) { this.sel.clear(); this.sel.add(p); this.anchor = p; }

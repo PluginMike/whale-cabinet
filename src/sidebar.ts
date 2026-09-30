@@ -10,6 +10,31 @@ type Device = { id: string; label: string; path: string; size: number; kind: str
 let places: Place[] = [];
 let devices: Device[] = [];
 
+// ---------- sections: icons, collapse (remembered) ----------
+const ICONS: Record<string, string> = {
+  places: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  recent: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  frequent: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  devices: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 14h.01M11 14h6"/>',
+  network: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  tags: '<path d="M3 12V3h9l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  tools: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+};
+document.querySelectorAll<HTMLElement>("#sidebar .sec").forEach((sec) => {
+  const h = sec.querySelector("h3")!;
+  h.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[sec.dataset.sec!] ?? ""}</svg><span>${h.textContent}</span><i class="sec-chev"></i>`;
+  h.tabIndex = 0;
+  h.addEventListener("click", () => {
+    sec.classList.toggle("collapsed");
+    const closed = [...document.querySelectorAll<HTMLElement>("#sidebar .sec.collapsed")].map((x) => x.dataset.sec);
+    invoke("set_settings", { patch: { collapsed: closed } });
+  });
+  h.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); h.click(); } });
+});
+invoke<Record<string, any>>("get_settings").then((s) => {
+  for (const k of s.collapsed ?? []) document.querySelector(`#sidebar .sec[data-sec="${k}"]`)?.classList.add("collapsed");
+});
+
 // ---------- places ----------
 export async function loadPlaces() {
   places = await invoke<Place[]>("places_list").catch(() => []);
