@@ -26,7 +26,7 @@ export function register(kind: string, f: (arg: string) => void | Promise<void>)
 export async function run(kind: string, arg: string) {
   document.body.classList.add("is-dialog");
   // feature dialogs live with their features
-  await Promise.all([import("./dialogs")]);
+  await Promise.all([import("./dialogs"), import("./picker")]);
   await handlers[kind]?.(arg);
 }
 

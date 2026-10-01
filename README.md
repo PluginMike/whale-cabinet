@@ -33,6 +33,7 @@ Download the AppImage or the .deb from [Releases](https://github.com/PluginMike/
 ```sh
 scripts/install.sh              # build + install to ~/.local/bin (Dolphin stays the default)
 scripts/install.sh --default    # …and take over from Dolphin: default for folders + "Show in folder" (D-Bus)
+scripts/install.sh --picker     # …and be the "Open file" dialog for other apps (browsers' upload buttons etc.)
 scripts/uninstall.sh            # remove it and give folders back to the previous file manager (Dolphin)
 ```
 
@@ -40,6 +41,13 @@ Everything is per-user; nothing needs root. `--default` runs
 `xdg-mime default whale-cabinet.desktop inode/directory` (remembering the previous handler for uninstall) and
 installs a `org.freedesktop.FileManager1` D-Bus activation file, so browsers' "Show in folder" starts Whale Cabinet
 with the file selected. While it runs, it also claims that D-Bus name from Dolphin.
+
+`--picker` makes Whale Cabinet the xdg-desktop-portal FileChooser: apps that ask the portal for a file (Chromium,
+Electron apps, Flatpaks; Firefox with `widget.use-xdg-desktop-portal.file-picker = 1`) get a clean picker with your
+Recent files, zoxide's Frequent folders and your places. Type to filter the folder and find zoxide folders at once;
+a typed `~/path` or `/path` opens it, Enter picks, Ctrl+H shows hidden files. Save dialogs stay with the GTK portal.
+It writes `~/.config/xdg-desktop-portal/<desktop>-portals.conf` (from the system one) and restarts the portal;
+`uninstall.sh` undoes it.
 
 Only one process runs: a second `whale-cabinet …` (or your SUPER+E keybind) opens a new window on the workspace
 you're on, sharing the clipboard, jobs and tags with the others. Ctrl+N does the same from inside.

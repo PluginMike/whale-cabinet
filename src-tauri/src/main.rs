@@ -5,6 +5,7 @@ mod crypt;
 mod desktop;
 mod dupes;
 mod fm1;
+mod portal;
 mod fuzzy;
 mod git;
 mod jobs;
@@ -353,6 +354,18 @@ async fn open_dialog(app: AppHandle, kind: String, arg: String, title: String, w
     .map_err(|e| e.to_string())?;
     blocking(move || rx.recv().map_err(|e| e.to_string())).await???;
     Ok(label)
+}
+
+/// The file picker's choice: hide it now, answer the portal, close it once the reply is out.
+#[tauri::command]
+fn portal_done(window: tauri::WebviewWindow, app: AppHandle, uris: Vec<String>) {
+    let _ = window.hide();
+    portal::finish(&app, window.label(), Some(uris));
+    // NOTE: delayed so a portal-only process (no browser windows) doesn't exit before the D-Bus reply is sent
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(500));
+        let _ = window.destroy();
+    });
 }
 
 fn url_arg(s: &str) -> String {
@@ -1139,6 +1152,9 @@ fn main() {
     if !isolated() {
         // Must be first: a second `whale-cabinet …` hands its arguments to this process and exits.
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            if argv.get(1).map(String::as_str) == Some("--portal") {
+                return; // already running, so already serving the portal
+            }
             let mut targets = listing::parse_args(argv.get(1..).unwrap_or(&[]), Path::new(&cwd));
             if targets.is_empty() {
                 targets.push(home_target());
@@ -1151,6 +1167,7 @@ fn main() {
         .on_window_event(|w, ev| match ev {
             tauri::WindowEvent::Focused(true) if is_browser(w.label()) => *w.state::<LastWin>().0.lock().unwrap() = w.label().to_owned(),
             tauri::WindowEvent::Destroyed => {
+                portal::finish(w.app_handle(), w.label(), None); // a picker closed without choosing
                 if is_browser(w.label()) {
                     // the last browser window closing = the app closing: keep every window's tabs for next time
                     let others = w.app_handle().webview_windows().keys().any(|l| is_browser(l) && l != w.label());
@@ -1178,6 +1195,7 @@ fn main() {
         .manage(std::sync::Arc::new(fuzzy::Fuzzy::default()))
         .manage(usage::Scans::default())
         .manage(plugins::Plugins::default())
+        .manage(portal::Pending::default())
         .register_asynchronous_uri_scheme_protocol("wcplugin", |ctx, req, responder| {
             let (app, uri) = (ctx.app_handle().clone(), req.uri().to_string());
             std::thread::spawn(move || responder.respond(plugins::protocol(&app, &uri)));
@@ -1217,7 +1235,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             plugins::plugins_list, plugins::plugin_consent, plugins::plugin_start, plugins::plugin_call, plugins::plugin_settings, plugins::plugin_set, plugins::plugin_readme, plugins::mime_types,
-            start_args, open_window, git_act, git_diff, git_difftool, has_difftool, gpg_keys, encrypt_item, is_symmetric, decrypt_item, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
+            start_args, open_window, portal_done, git_act, git_diff, git_difftool, has_difftool, gpg_keys, encrypt_item, is_symmetric, decrypt_item, usage_scan, usage_view, usage_drop, shelf_get, shelf_add, shelf_remove, open_session_window, session_update, session_take, dupes_start, paths_exist, can_write, admin_run, open_as_admin, edit_as_admin, jobs::op_admin, net_state, net_mount, net_unmount, net_browse, net_save, net_forget, recent_list, recent_remove, fuzzy_find, git_status, zoxide_add, zoxide_query, selftest, selftest_dir, selftest_suites, selftest_cmd, list_dir, resolve_path, disk_space, places, open_path, watch,
             get_settings, set_settings, get_theme, open_dialog, drag_icon, thumbnail, pdf_pages, pdf_page, dir_count, read_text, dir_stats, tags_edit, tag_meta, set_rating, tag_counts, tag_items,
             apps_for, all_apps, launch_app, open_default, set_default_app, mime_icon, open_terminal, file_props, set_mode, file_details, checksum,
             jobs::op_compress, jobs::op_extract, jobs::archive_tools, jobs::copy_text,
@@ -1229,6 +1247,10 @@ fn main() {
         ])
         .run({
             let mut ctx = tauri::generate_context!();
+            if std::env::args().nth(1).as_deref() == Some("--portal") {
+                // started by D-Bus for a file picker: no browser window (the app exits when the picker closes)
+                ctx.config_mut().app.windows.clear();
+            }
             if isolated() {
                 // Test windows are titled "WCTEST…" before they map, so a title rule can route them to a
                 // throwaway monitor without ever matching the user's own Whale Cabinet windows.

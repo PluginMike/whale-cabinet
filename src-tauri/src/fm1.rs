@@ -55,14 +55,20 @@ impl FileManager1 {
 }
 
 /// Claim the bus name (taking it over from Dolphin if it holds it) and serve until the app exits.
+/// The same connection serves the file picker portal backend.
 pub fn serve(app: AppHandle) -> Result<zbus::blocking::Connection, String> {
     let conn = zbus::blocking::connection::Builder::session()
         .map_err(|e| e.to_string())?
-        .serve_at("/org/freedesktop/FileManager1", FileManager1 { app })
+        .serve_at("/org/freedesktop/FileManager1", FileManager1 { app: app.clone() })
+        .map_err(|e| e.to_string())?
+        .serve_at(crate::portal::PATH, crate::portal::FileChooser { app })
         .map_err(|e| e.to_string())?
         .build()
         .map_err(|e| e.to_string())?;
     use zbus::fdo::RequestNameFlags as F;
+    if let Err(e) = conn.request_name(crate::portal::NAME) {
+        eprintln!("whale-cabinet: file picker portal unavailable: {e}");
+    }
     conn.request_name_with_flags("org.freedesktop.FileManager1", F::ReplaceExisting | F::AllowReplacement | F::DoNotQueue).map_err(|e| e.to_string())?;
     Ok(conn)
 }

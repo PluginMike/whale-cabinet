@@ -614,3 +614,41 @@ body.dragging #shelf.empty { display: block; }
 .md pre { position: relative; }
 .pre-copy { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity .15s; border: 1px solid var(--divider); background: var(--front); color: var(--on-body); border-radius: calc(var(--radius) * .4); padding: 2px 8px; font-size: .8em; cursor: pointer; font-family: inherit; }
 .md pre:hover .pre-copy, .pre-copy:focus { opacity: 1; }
+
+/* file picker for other apps (picker.ts) */
+#dialog.pk-dlg .dlg-body { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.pk { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px 1fr; }
+.pk aside { background: var(--body); color: var(--on-body); padding: 10px 8px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.pk aside > * { flex: none; }
+.pk aside h4 { margin: 14px 8px 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; opacity: .6; font-weight: 600; }
+.pk aside button { all: unset; display: flex; flex-direction: column; min-width: 0; padding: 6px 10px; border-radius: calc(var(--radius) * .5); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk aside button small { font-size: 10.5px; opacity: .6; overflow: hidden; text-overflow: ellipsis; }
+.pk aside button:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pk aside button.on { background: var(--accent); color: var(--on-accent); }
+.pk aside button.on small { opacity: .8; }
+.pk aside .pk-recent { font-weight: 600; }
+.pk section { display: flex; flex-direction: column; min-width: 0; background: var(--paper); color: var(--on-paper); }
+.pk-top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--divider); }
+.pk-where { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.pk-q { flex: 1; height: 32px; padding: 0 12px; border: 1px solid var(--divider); border-radius: 999px; background: var(--panel); color: inherit; font: inherit; outline: none; }
+.pk-q:focus { border-color: var(--accent); }
+.pk-list { list-style: none; margin: 0; padding: 6px; overflow: auto; flex: 1; outline: none; }
+.pk-list li { display: grid; grid-template-columns: 40px 1fr 80px 150px; align-items: center; gap: 10px; padding: 4px 8px; border-radius: calc(var(--radius) * .5); cursor: default; }
+.pk-list li:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.pk-list li.on { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.pk-list li.cur { box-shadow: inset 0 0 0 1px var(--accent); }
+.pk-list li.pk-empty { display: block; color: var(--muted); padding: 24px; text-align: center; }
+.pk-ico { width: 40px; height: 32px; border-radius: 5px; display: grid; place-items: center; font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: var(--paper); background: var(--k-other, var(--muted)); overflow: hidden; }
+.pk-ico.k-dir { background: var(--accent); font-size: 13px; }
+.pk-ico.k-img { background: var(--k-img); } .pk-ico.k-vid { background: var(--k-vid); } .pk-ico.k-aud { background: var(--k-aud); } .pk-ico.k-arc { background: var(--k-arc); }
+.pk-ico img { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .15s; }
+.pk-ico img.ok { opacity: 1; }
+.pk-name { display: flex; flex-direction: column; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pk-name small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.pk-size, .pk-date { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
+.pk-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--divider); background: var(--panel); }
+.pk-foot .pk-n { flex: 1; color: var(--muted); font-size: 12px; }
+.pk-foot select { height: 28px; }
+.pk-foot button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 5px 16px; cursor: pointer; }
+.pk-foot button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.pk-foot button:disabled { opacity: .5; cursor: default; }

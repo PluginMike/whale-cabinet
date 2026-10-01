@@ -3,6 +3,8 @@
 #   scripts/install.sh            # install / update (Dolphin stays the default)
 #   scripts/install.sh --default  # …and take over from Dolphin: default for folders (inode/directory) and
 #                                 #    the FileManager1 D-Bus activation ("Show in folder" from other apps)
+#   scripts/install.sh --picker   # …and be the "Open file" dialog for other apps (xdg-desktop-portal FileChooser;
+#                                 #    save dialogs stay GTK)
 #   scripts/install.sh --no-build # install the already-built release binary
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -71,4 +73,21 @@ if [[ " $* " == *" --default "* ]]; then
   mkdir -p "$DBUS"
   sed "s|@BIN@|$BIN_DIR/whale-cabinet|" assets/org.freedesktop.FileManager1.service > "$DBUS/org.freedesktop.FileManager1.service"
   echo "default file manager: whale-cabinet.desktop (was: ${prev:-none}; uninstall.sh restores it)"
+fi
+
+if [[ " $* " == *" --picker "* ]]; then
+  PORTALS="${XDG_DATA_HOME:-$HOME/.local/share}/xdg-desktop-portal/portals"
+  mkdir -p "$DBUS" "$PORTALS"
+  sed "s|@BIN@|$BIN_DIR/whale-cabinet|" assets/org.freedesktop.impl.portal.desktop.whalecabinet.service > "$DBUS/org.freedesktop.impl.portal.desktop.whalecabinet.service"
+  install -m644 assets/whalecabinet.portal "$PORTALS/whalecabinet.portal"
+  # portals.conf for this desktop: start from the system one, then point FileChooser at us
+  desk=${XDG_CURRENT_DESKTOP%%:*}; desk=${desk,,}
+  conf="${XDG_CONFIG_HOME:-$HOME/.config}/xdg-desktop-portal/${desk:+$desk-}portals.conf"
+  if [[ ! -f $conf ]]; then
+    mkdir -p "$(dirname "$conf")"
+    cp "/usr/share/xdg-desktop-portal/${desk:+$desk-}portals.conf" "$conf" 2>/dev/null || printf '[preferred]\ndefault=gtk\n' > "$conf"
+  fi
+  sed -i '/^org\.freedesktop\.impl\.portal\.FileChooser=/d; /^\[preferred\]/a org.freedesktop.impl.portal.FileChooser=whalecabinet' "$conf"
+  systemctl --user restart xdg-desktop-portal 2>/dev/null || true
+  echo "file picker: whale-cabinet ($conf; uninstall.sh undoes it). Restart apps that were already open."
 fi
