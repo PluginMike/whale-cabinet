@@ -276,7 +276,6 @@ async function showQL(which?: Entry) {
   const body = ql.querySelector<HTMLElement>(".ql-body")!;
   const pv = e.dir ? null : await previewOf(e, true);
   if (my !== qlToken) return;
-  if (pv?.el instanceof HTMLImageElement) { pv.el.classList.add("zoomable"); pv.el.title = "Click: actual size / fit"; pv.el.onclick = () => pv.el.classList.toggle("actual"); }
   if (pv) body.replaceChildren(pv.el);
   else body.innerHTML = `<div class="glyph" style="transform:scale(1.6)">${glyph(e)}</div>`;
   body.querySelector("video")?.play().catch(() => {});
@@ -296,7 +295,7 @@ window.addEventListener("keydown", (ev) => {
     showQL();
   }
 });
-ql.addEventListener("dblclick", (ev) => { if (!(ev.target as HTMLElement).closest(".zoomable, .pv-tools, button, .md, pre")) closeQL(); });
+ql.addEventListener("dblclick", (ev) => { if (!(ev.target as HTMLElement).closest(".pv-tools, button, .md, pre")) closeQL(); });
 /** Open the viewer on this entry if it can show it properly. */
 hooks.preview = (e) => { if (!previewable(e)) return false; showQL(e); return true; };
 hooks.keys.push((ev) => {

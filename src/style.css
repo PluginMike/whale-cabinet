@@ -332,6 +332,9 @@ body.resizing, body.resizing * { cursor: col-resize !important; user-select: non
 #quicklook .ql-body .md, #quicklook .ql-body pre { width: min(1180px, 96vw); max-height: none; font-size: 1.12em; }
 #quicklook .ql-body img, #quicklook .ql-body video { align-self: center; }
 #quicklook .ql-head { font-size: 1.15em; }
+/* a lone picture/video fills the window, letterboxed (scaled up too), no scrollbars */
+#quicklook .ql-body:has(> img:only-child, > video:only-child) { display: block; overflow: hidden; }
+#quicklook .ql-body > img:only-child, #quicklook .ql-body > video:only-child { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; border-radius: 0; }
 #quicklook .ql-body iframe { width: 100%; height: 100%; border: 0; background: var(--paper); }
 
 /* ---------- dialogs (separate windows) ---------- */
@@ -606,8 +609,6 @@ body.dragging #shelf.empty { display: block; }
 
 /* viewer: toolbar, PDF pages, zoom, copy buttons */
 #quicklook .ql-head button { border: 1px solid var(--divider); background: var(--paper); color: var(--on-paper); border-radius: calc(var(--radius) * .5); padding: 3px 12px; cursor: pointer; font-weight: 400; font-size: .85em; }
-#quicklook .ql-body img.zoomable { cursor: zoom-in; }
-#quicklook .ql-body img.zoomable.actual { max-width: none; max-height: none; cursor: zoom-out; }
 .pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(1400px, 90vw); padding-bottom: 24px; }
 #quicklook .ql-body .pdf-pages img.pdf-page { width: 100%; max-height: none; aspect-ratio: 1 / 1.414; background: #fff; border-radius: 3px; box-shadow: 0 6px 24px -10px rgb(0 0 0 / .6); }
 .md pre { position: relative; }
