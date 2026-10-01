@@ -33,6 +33,8 @@ fn kind(path: &Path) -> &'static str {
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "tif" | "tiff" | "ico" => "image",
         "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv" | "flv" | "m4v" | "mpg" | "mpeg" => "video",
         "pdf" => "pdf",
+        // image-rs can't decode these; libvips can (libheif / libraw), and applies the EXIF rotation
+        "heic" | "heif" | "dng" | "raw" | "cr2" | "cr3" | "nef" | "arw" | "raf" | "orf" | "rw2" | "pef" | "srw" => "photo",
         _ => match infer::get_from_path(path).ok().flatten().map(|t| t.matcher_type()) {
             Some(infer::MatcherType::Image) => "image",
             Some(infer::MatcherType::Video) => "video",
@@ -45,18 +47,20 @@ fn kind(path: &Path) -> &'static str {
 fn render(src: &Path, size: u32) -> Result<image::DynamicImage, String> {
     match kind(src) {
         "image" => image::open(src).map(|i| i.thumbnail(size, size)).map_err(|e| e.to_string()),
-        k @ ("video" | "pdf") => {
+        k @ ("video" | "pdf" | "photo") => {
             let tmp = tempfile_path();
             let ok = if k == "video" {
                 Command::new("ffmpegthumbnailer").arg("-i").arg(src).arg("-o").arg(&tmp).args(["-s", &size.to_string(), "-c", "png"]).output()
+            } else if k == "photo" {
+                Command::new("vipsthumbnail").arg(src).arg("-o").arg(&tmp).args(["-s", &format!("{size}>")]).output() // ">": shrink only
             } else {
                 // pdftoppm appends ".png" to the output root with -singlefile
                 Command::new("pdftoppm").args(["-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to", &size.to_string()]).arg(src).arg(tmp.with_extension("")).output()
             }
-            .map_err(|e| format!("{e} (is {} installed?)", if k == "video" { "ffmpegthumbnailer" } else { "poppler" }))?;
+            .map_err(|e| format!("{e} (is {} installed?)", match k { "video" => "ffmpegthumbnailer", "photo" => "libvips", _ => "poppler" }))?;
             let img = image::open(&tmp).map_err(|e| format!("{}: {e}", String::from_utf8_lossy(&ok.stderr).trim()));
             let _ = fs::remove_file(&tmp);
-            img.map(|i| i.thumbnail(size, size))
+            if k == "photo" { img } else { img.map(|i| i.thumbnail(size, size)) }
         }
         _ => Err("no thumbnailer for this type".into()),
     }
@@ -262,6 +266,18 @@ trailer<</Root 1 0 R>>\n%%EOF\n").unwrap();
         assert!(fresh(&th, fs::metadata(&img).unwrap().mtime()));
         // big preview sizes use our own cache
         assert!(thumbnail(&root, &img, 800).unwrap().starts_with(root.join("whale-cabinet/previews/800")));
+    }
+
+    #[test]
+    fn heic_through_libvips() {
+        let t = tempfile::tempdir().unwrap();
+        let (png, heic) = (t.path().join("a.png"), t.path().join("IMG_0001.HEIC"));
+        image::DynamicImage::new_rgb8(600, 300).save(&png).unwrap();
+        if Command::new("vips").arg("copy").arg(&png).arg(&heic).status().map_or(true, |s| !s.success()) {
+            return eprintln!("skipped: no libvips with HEIF");
+        }
+        let th = thumbnail(&t.path().join("cache"), &heic, 1200).unwrap();
+        assert_eq!(image::image_dimensions(&th).unwrap(), (600, 300), "never upscaled");
     }
 
     #[test]

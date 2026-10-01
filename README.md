@@ -71,7 +71,7 @@ bind = SUPER, E, exec, whale-cabinet
 Needs Rust (via [rustup](https://rustup.rs)), Node ≥ 20, WebKitGTK 4.1 and the usual build tools.
 Required at runtime (install.sh checks): zoxide (jump box, Frequent), fd (quick open), git (badges), gvfs with its
 smb/dav/nfs backends (network locations) and polkit (administrator actions).
-The optional tools light up extra features: poppler (PDF previews), ffmpegthumbnailer + ffmpeg (video thumbnails,
+The optional tools light up extra features: poppler (PDF previews), libvips (HEIC and camera RAW/DNG photos), ffmpegthumbnailer + ffmpeg (video thumbnails,
 media details), libarchive/zip/7-Zip (compress/extract), wl-clipboard (copy/paste with other apps), udisks2 (devices),
 libsecret's secret-tool (remembering network passwords).
 
@@ -79,7 +79,7 @@ libsecret's secret-tool (remembering network passwords).
 ```sh
 sudo pacman -S --needed base-devel webkit2gtk-4.1 curl wget file openssl librsvg libappindicator-gtk3 nodejs npm rustup
 sudo pacman -S --needed zoxide fd git gvfs gvfs-smb gvfs-dnssd gvfs-nfs polkit
-sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-clipboard udisks2   # optional
+sudo pacman -S --needed poppler libvips libheif libraw ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-clipboard udisks2   # optional
 ```
 
 **Fedora**
@@ -87,14 +87,14 @@ sudo pacman -S --needed poppler ffmpegthumbnailer ffmpeg libarchive zip 7zip wl-
 sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel libxdo-devel nodejs npm
 sudo dnf group install c-development
 sudo dnf install zoxide fd-find git gvfs gvfs-smb gvfs-fuse polkit
-sudo dnf install poppler-utils ffmpegthumbnailer ffmpeg-free bsdtar zip p7zip wl-clipboard udisks2   # optional
+sudo dnf install poppler-utils vips-tools vips-heif ffmpegthumbnailer ffmpeg-free bsdtar zip p7zip wl-clipboard udisks2   # optional
 ```
 
 **Debian / Ubuntu**
 ```sh
 sudo apt install build-essential libwebkit2gtk-4.1-dev libssl-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev curl wget file nodejs npm
 sudo apt install zoxide fd-find git gvfs gvfs-backends gvfs-fuse pkexec
-sudo apt install poppler-utils ffmpegthumbnailer ffmpeg libarchive-tools zip 7zip wl-clipboard udisks2   # optional
+sudo apt install poppler-utils libvips-tools ffmpegthumbnailer ffmpeg libarchive-tools zip 7zip wl-clipboard udisks2   # optional
 ```
 
 Then:
@@ -287,7 +287,7 @@ selects the extra copies keeping the newest, the oldest or the one in a folder y
 
 - Image, video and PDF thumbnails load lazily in the list and grid, using the shared freedesktop cache
   (`~/.cache/thumbnails`, same as Dolphin/Nautilus). Missing ones are generated (videos need `ffmpegthumbnailer`,
-  PDFs `pdftoppm` from poppler).
+  PDFs `pdftoppm` from poppler, HEIC and RAW/DNG photos `vipsthumbnail` from libvips).
 - The info panel (F11) previews the selection: images, video/audio players, the first page of PDFs,
   syntax-highlighted text/code, and rendered Markdown (tables, task lists, code blocks, relative images and links;
   "View source" toggles). Markdown is sanitized before it's shown.

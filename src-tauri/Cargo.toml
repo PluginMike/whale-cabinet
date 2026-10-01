@@ -1,6 +1,6 @@
 [package]
 name = "whale-cabinet"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "A Linux file manager with a flat filing-cabinet look"
 license = "GPL-3.0-or-later"
