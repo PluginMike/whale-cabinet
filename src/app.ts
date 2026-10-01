@@ -90,7 +90,8 @@ export const host: Host = {
   changed(p) { if (!tab()) return; if (p === pane()) chrome(); renderTabbar(); },
   open(e, p) {
     if (e.dir) p.navigate(e.path);
-    else if (settings.openFiles === "viewer" && hooks.preview?.(e)) return;
+    // plugin photos (e.preview) always open in the viewer: "Open with app" there downloads the original
+    else if ((settings.openFiles === "viewer" || e.preview) && hooks.preview?.(e)) return;
     else if (hooks.open) hooks.open(e, p);
     else invoke("open_path", { path: e.path }).catch((err) => flash(String(err)));
   },
