@@ -53,7 +53,7 @@ impl FileChooser {
         let arg = picker_arg(&title, &options);
         let title = if title.is_empty() { "Open".to_owned() } else { title };
         let (tx, mut rx) = channel(1);
-        let Ok(label) = crate::open_dialog(self.app.clone(), "pick".into(), arg.to_string(), title, 980.0, 640.0).await else { return (2, HashMap::new()) };
+        let Ok(label) = crate::open_dialog(self.app.clone(), "pick".into(), arg.to_string(), title, 1080.0, 700.0).await else { return (2, HashMap::new()) };
         self.app.state::<Pending>().0.lock().unwrap().insert(label, tx);
         match rx.recv().await.flatten() {
             Some(uris) => (0, HashMap::from([("uris".to_owned(), Value::from(uris).try_to_owned().unwrap())])),

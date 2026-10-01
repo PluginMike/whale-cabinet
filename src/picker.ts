@@ -70,7 +70,7 @@ register("pick", async (raw) => {
   }
 
   async function frequent() {
-    const zs = await invoke<[number, string][]>("zoxide_query", { q: /^[~/]/.test(q.value) ? "" : q.value.trim(), limit: 8 }).catch(() => []);
+    const zs = await invoke<[number, string][]>("zoxide_query", { q: /^[~/]/.test(q.value) ? "" : q.value.trim(), limit: 3 }).catch(() => []);
     $(".pk-z").innerHTML = zs.map(([, p]) => `<button data-p="${esc(p)}" title="${esc(p)}">${esc(shown(baseName(p)))}<small>${esc(parentOf(p).replace(home, "~"))}</small></button>`).join("") || `<p class="hint">No matches</p>`;
   }
 
