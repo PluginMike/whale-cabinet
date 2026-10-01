@@ -138,12 +138,12 @@ export function copyButton(text: () => string, label = "Copy") {
 }
 const tools = (...bs: HTMLElement[]) => { const t = document.createElement("div"); t.className = "pv-tools"; t.append(...bs); return t; };
 
-// WebKit can't show these itself (they still get thumbnails where a thumbnailer can)
-const NO_WEB = new Set(["heic", "heif", "raw", "cr2", "nef", "tif", "tiff"]);
+// WebKit can't show these itself: the viewer shows a big decoded PNG from the thumbnailer (libvips / image-rs)
+const NO_WEB = new Set("heic heif raw dng cr2 cr3 nef arw raf orf rw2 pef srw tif tiff".split(" "));
 const TEXTY = new Set(["pdf", "md", "markdown", "txt", "log", "csv", "conf", "ini", "desktop"]);
 /** Can the viewer show this one properly? (decides "open in the viewer" for Enter / double-click) */
 export const previewable = (e: Entry) => !e.dir && !e.special && !e.broken && !e.trashId &&
-  (!!e.preview || (["img", "vid", "aud", "code"].includes(kindOf(e)) && !NO_WEB.has(ext(e))) || TEXTY.has(ext(e)));
+  (!!e.preview || ["img", "vid", "aud", "code"].includes(kindOf(e)) || TEXTY.has(ext(e)));
 
 /** Every page of a PDF, each rendered (poppler) as it scrolls near. */
 async function pdfPages(e: Entry) {
@@ -178,6 +178,11 @@ async function previewOf(e: Entry, big: boolean): Promise<Big | null> {
   const url = assetUrl(e.path);
   if (e.preview) { const i = new Image(); i.src = e.preview; i.draggable = false; return { el: i }; }
   if (e.dir || e.special || e.broken) return null;
+  if (k === "img" && NO_WEB.has(x)) {
+    const p = await invoke<string>("thumbnail", { path: e.path, size: big ? 2400 : 600 }).catch(() => "");
+    if (!p) return null;
+    const i = new Image(); i.src = assetUrl(p); i.draggable = false; return { el: i };
+  }
   if (k === "img") { const i = new Image(); i.src = url; i.draggable = false; return { el: i }; }
   if (k === "vid") { const v = document.createElement("video"); v.src = url; v.controls = true; v.preload = "metadata"; return { el: v }; }
   if (k === "aud") { const a = document.createElement("audio"); a.src = url; a.controls = true; a.preload = "metadata"; return { el: a }; }

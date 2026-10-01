@@ -33,7 +33,7 @@ export const fmtDate = (ms: number) => (ms ? dateFmt.format(ms) : "");
 
 export const KINDS: Record<string, string> = {};
 for (const [k, list] of Object.entries({
-  img: "png jpg jpeg gif webp svg bmp tiff tif avif heic ico jxl raw cr2 nef",
+  img: "png jpg jpeg gif webp svg bmp tiff tif avif heic heif ico jxl raw dng cr2 cr3 nef arw raf orf rw2 pef srw",
   vid: "mp4 mkv webm avi mov wmv flv m4v mpg mpeg",
   aud: "mp3 flac ogg opus wav m4a aac wma",
   arc: "zip tar gz xz bz2 zst 7z rar tgz iso deb rpm appimage",
